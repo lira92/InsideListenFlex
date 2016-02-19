@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							xmlns:components="components.*"
+							width="758" height="396" creationComplete="onInit(event)"
+							layout="vertical" paddingBottom="5" paddingLeft="5" paddingRight="5"
+							paddingTop="5" title="Cadastro de albums" resizable="true">
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator source="{txtNome}" property="text"
+								maxLength="100" tooLongError="O campo nome excedeu o limite de 100 caracteres!"
+								required="true" requiredFieldError="Informe o nome do Album!"/>
+			<s:NumberValidator allowNegative="false" minValue="0" 
+							   lessThanMinError="Selecione o tipo" negativeError="Selecione o tipo" 
+							   property="selectedIndex" source="{cboArtista}"/>
+		</fx:Array>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import Model.Album;
+			import Model.Artista;
+			import Model.ModelLocatorLogin;
+			import Model.Usuario;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.Fault;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.validators.Validator;
+			
+			[Bindable]private var album:Album = new Album();
+			[Bindable]private var arrAlbum:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrArtista:ArrayCollection = new ArrayCollection();
+			[Bindable]private var editando:Boolean = true;
+			private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			
+			private function fault(event:FaultEvent):void
+			{
+				if(event.fault.toString().indexOf("The DELETE statement conflicted with the REFERENCE constraint ") != -1)
+				{
+					ServiceAlert.erro("Não foi possível excluir o Album pois o mesmo possui vinculos!");
+				}
+				else
+				{
+					ServiceAlert.erro("Ocorreu um erro" + event.fault.message);
+				}
+			}
+			
+			private function resultListar(event:ResultEvent):void
+			{
+				arrAlbum = event.result as ArrayCollection;
+				listarArtista();
+			}
+			
+			private function listarAlbum():void
+			{
+				RemoteDestination.Remote("Album", "tokListar", "listarAlbum", fault, resultListar);
+				
+			}
+			
+			private function listarArtista():void
+			{
+				RemoteDestination.Remote("Artista", "tokListarArtista", "listarArtistas", fault, resultListarArtista);
+			}
+			
+			private function resultListarArtista(event:ResultEvent):void
+			{
+				arrArtista = event.result as ArrayCollection;
+			}
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				listarAlbum();
+			}
+			
+			protected function clickGravar(event:MouseEvent):void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(hasErrors.length == 0)
+				{
+					album.albNome = txtNome.text;
+					album.artCodigo = cboArtista.selectedItem.artCodigo;
+					RemoteDestination.Remote("Album", "tokGravar", "gravarAlbum", fault ,resultGravar, album, __modelLocator.usuarioLogado.usuCodigo);
+				}
+				else
+				{
+					ServiceAlert.erro("Verifique os campos em vermelho!");
+				}
+			}
+			
+			private function resultGravar(event:ResultEvent):void
+			{
+				if(editando == false)
+				{
+					ServiceAlert.sucesso("Album " + event.result + "gravado com sucesso!");
+				}
+				else
+				{
+					ServiceAlert.sucesso("Album " + event.result + "editado com sucesso!");
+				}
+				
+				listarAlbum();
+				limpar();
+			}
+			
+			public function clickEditar():void
+			{
+				album = gridAlbum.selectedItem as Album;
+				editando = true;
+			}
+			
+			public function excluir():void
+			{
+				album = gridAlbum.selectedItem as Album;
+				ServiceAlert.confirmacao("Confirma exclusão?", clickDeletar);
+			}
+			
+			private function clickDeletar(event: CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					RemoteDestination.Remote("Album", "tokExcluir", "excluirAlbum", fault ,resultExcluir, album.albCodigo,
+						__modelLocator.usuarioLogado.usuCodigo);
+					limpar();
+				}
+			}
+			
+			private function resultExcluir(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Album " + event.result + " excluido com sucesso!");
+				listarAlbum();
+			}
+			
+			private function limpar():void
+			{
+				album = new Album();
+				cboArtista.selectedIndex = -1;
+				editando = false;
+			}
+			
+			private function filter(obj:Object):Boolean
+			{
+				if((obj.albNome as String).toUpperCase().indexOf(txtBuscar.text.toUpperCase()) != -1)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function pesquisar(event:KeyboardEvent):void
+			{
+				arrAlbum.filterFunction = filter;
+				arrAlbum.refresh();
+			}
+			
+			public function listarMusicas():void
+			{
+				var listar:viewListarMusicas = new viewListarMusicas();
+				listar.tipo = "alb"
+				listar.album = gridAlbum.selectedItem as Album;
+				FlexGlobals.topLevelApplication.addCenterMDIWindowCustom(FlexGlobals.topLevelApplication.mdiCanvas, listar);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Buscar"/>
+		<s:TextInput id="txtBuscar" width="300" keyUp="pesquisar(event)"/>
+	</s:HGroup>
+	<mx:AdvancedDataGrid id="gridAlbum" width="100%" height="100%" designViewDataType="flat" dataProvider="{arrAlbum}">
+		<mx:columns>
+			<mx:AdvancedDataGridColumn dataField="albCodigo" headerText="Código" width="75"/>
+			<mx:AdvancedDataGridColumn dataField="albNome" headerText="Nome"/>
+			<mx:AdvancedDataGridColumn dataField="artNome" headerText="Artista"/>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/play.png')" useHandCursor="true" buttonMode="true" click="outerDocument.listarMusicas()" />
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/edit.png')" useHandCursor="true" buttonMode="true" click="outerDocument.clickEditar()" />
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="true" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/delete.png')" useHandCursor="true" buttonMode="true" click="outerDocument.excluir()" />
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</mx:columns>
+	</mx:AdvancedDataGrid>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Nome: "/>
+		<s:TextInput id="txtNome" width="100%" text="{album.albNome}"/>
+		<components:ServiceLabel text="Artista: "/>
+		<components:ServiceDropDown id="cboArtista" width="100%" 
+									selectedProperty="artCodigo" selectedValue="{album.artCodigo}"
+									dataProvider="{arrArtista}" labelField="artNome"/>
+	</s:HGroup>
+	<s:HGroup width="100%" horizontalAlign="right">
+		<components:ServiceButton tipoBotao="gravar" id="btnGravar" click="clickGravar(event)"/>
+		<components:ServiceButton tipoBotao="limpar" id="btnLimpar" click="limpar()"/>
+	</s:HGroup>
+</containers:MDIWindowCustom>

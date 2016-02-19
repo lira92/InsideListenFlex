@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							width="600" height="300" layout="vertical" paddingBottom="5"
+							paddingLeft="5" paddingRight="5" paddingTop="5"
+							title="Cadastro de gênero" xmlns:components="components.*"
+							creationComplete="onInit(event)">
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator source="{txtNome}" property="text"
+								maxLength="150" tooLongError="O campo nome excedeu o limite de 150 caracteres!"
+								required="true" requiredFieldError="Informe um nome!"/>
+		</fx:Array>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import Model.Genero;
+			import Model.ModelLocatorLogin;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.mx_internal;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.validators.Validator;
+			[Bindable]private var arrGenero:ArrayCollection = new ArrayCollection();
+			[Bindable]private var genero:Genero = new Genero();
+			private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			private var editando:Boolean = false;
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				listarGenero();	
+			}
+			
+			private function listarGenero():void
+			{
+				RemoteDestination.Remote("Genero", "tokListar", "listarGenero", fault, resultListarGenero);
+			}
+			
+			private function resultListarGenero(event:ResultEvent):void
+			{
+				arrGenero = event.result as ArrayCollection;
+			}
+			
+			protected function gravar(event:MouseEvent):void
+			{
+				var hasError:Array = Validator.validateAll(arrValidadores);
+				if(hasError.length == 0)
+				{
+					RemoteDestination.Remote("Genero", "tokGravar", "gravarGenero", fault, resultGravar, genero, __modelLocator.usuarioLogado.usuCodigo);
+				}
+				else
+				{
+					ServiceAlert.atencao("Verifique os campos em vermelho!");
+				}
+			}
+			
+			private function resultGravar(event:ResultEvent):void
+			{
+				if(editando == true)
+				{
+					ServiceAlert.sucesso("Genero " + event.result + " gravado com sucesso!");
+				}
+				else
+				{
+					ServiceAlert.sucesso("Genero " + event.result + " editado com sucesso!");
+				}
+				listarGenero();
+				limparObjeto();
+			}
+			
+			public function clickExcluir(event:MouseEvent):void
+			{
+				ServiceAlert.confirmacao("Confirma exclusão do gênero?", excluirGenero);
+				lblAcao.tipo = "excluindo";
+			}
+			
+			private function excluirGenero(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					genero = gridGenero.selectedItem as Genero;
+					RemoteDestination.Remote("Genero", "tokExcluir", "excluirGenero", fault, resultExcluir, genero.genCodigo, __modelLocator.usuarioLogado.usuCodigo);
+				}
+				else
+				{
+					lblAcao.tipo = "cadastrando";
+					limparObjeto();
+				}
+			}
+			
+			private function resultExcluir(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Gênero " + event.result + " excluída com sucesso!");
+				listarGenero();
+				limparObjeto();
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				if(event.fault.toString().indexOf("The DELETE statement conflicted with the REFERENCE constraint ") != -1)
+				{
+					ServiceAlert.erro("Não é possível excluir o Genero pois o mesmo possui vinculos!");	
+					limparObjeto();
+				}
+				else
+				{
+					ServiceAlert.erro("Erro! " + event.fault.message);
+					limparObjeto();
+				}
+			}
+			
+			private function limparObjeto():void
+			{
+				genero = new Genero();
+				editando = false;
+				lblAcao.tipo = "cadastrando";
+			}
+			
+			public function editarGenero():void
+			{
+				genero = gridGenero.selectedItem as Genero;
+				editando = true;
+				lblAcao.tipo = "alterando";
+			}
+			
+			
+			private function filter(obj:Object):Boolean
+			{
+				if((obj.genNome as String).toUpperCase().indexOf(txtBuscar.text.toUpperCase()) == -1)
+				{
+					return false;
+				}
+				else 
+				{
+					return true;
+				}
+			}
+			
+			protected function pesquisar(event:KeyboardEvent):void
+			{
+				arrGenero.filterFunction = filter;
+				arrGenero.refresh();
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Buscar "/>
+		<s:TextInput id="txtBuscar" width="300" keyUp="pesquisar(event)"/>
+	</s:HGroup>
+	<mx:AdvancedDataGrid id="gridGenero" width="100%" height="100%" designViewDataType="flat" dataProvider="{arrGenero}">
+		<mx:columns>
+			<mx:AdvancedDataGridColumn dataField="genCodigo" headerText="Código" width="100"/>
+			<mx:AdvancedDataGridColumn dataField="genNome" headerText="Nome"/>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/edit.png')" useHandCursor="true" buttonMode="true" click="outerDocument.editarGenero()"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/delete.png')" useHandCursor="true" buttonMode="true" click="outerDocument.clickExcluir(event)"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</mx:columns>
+	</mx:AdvancedDataGrid>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Nome"/>
+		<components:TextInput id="txtNome" width="300" text="@{genero.genNome}"/>
+		<components:ServiceButton tipoBotao="gravar" click="gravar(event)"/>
+		<components:ServiceButton tipoBotao="limpar" click="limparObjeto()"/>
+	</s:HGroup>
+	<s:HGroup width="100%" horizontalAlign="right">
+		<components:ServiceLabel id="lblAcao" tipo="cadastrando"/>
+	</s:HGroup>
+</containers:MDIWindowCustom>

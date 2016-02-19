@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							xmlns:components="components.*"
+							width="1100" height="600" creationComplete="onInit(event)"
+							layout="vertical" paddingBottom="5" paddingLeft="5" paddingRight="5"
+							paddingTop="5" title="Eventos">
+	<fx:Script>
+		<![CDATA[
+			import Model.Evento;
+			import Model.Musicas;
+			import Model.PlaylistMusica;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import flash.sampler.NewObjectSample;
+			
+			import flashx.textLayout.operations.CopyOperation;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.events.DragEvent;
+			import mx.events.DropdownEvent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]private var arrEvento:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrPlaylistMusica:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrTipo:ArrayCollection = new ArrayCollection([{label:"A"},
+				{label:"R"},
+				{label:"G"},
+				{label:"M"},
+				{label:"S"},
+				{label:"P"},
+				{label:"L"},
+				{label:"U"},
+				{label:"T"}]);
+			
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				listarEvento();
+				
+				var dataTMP:Date = new Date();
+				dataTMP.setDate(dataTMP.getDate() - 30);
+				dataInicial.selectedDate = dataTMP;
+				dataFinal.selectedDate = new Date();
+			}
+			
+			
+			private function listarEvento():void
+			{
+				RemoteDestination.Remote("Evento", "tokListar", "listarEvento", fault, resultListarEvento);
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				ServiceAlert.erro("Erro! " + event.fault.message);
+			}
+			
+			private function resultListarEvento(event:ResultEvent):void
+			{
+				arrEvento = event.result as ArrayCollection;
+			}
+			
+			public function ouvirEvento(event:MouseEvent):void
+			{
+				var evento:Evento = new Evento();
+				evento = gridEvento.selectedItem as Evento;
+				if(evento.eveTipo == 'S' && evento.nomeReferencia != "")
+				{
+					var musica:Musicas = new Musicas();
+					musica.musNome = evento.nomeReferencia;
+					FlexGlobals.topLevelApplication.musica = musica;
+				}
+				else if(evento.eveTipo == "L" && evento.nomeReferencia != "")
+				{
+					RemoteDestination.Remote("PlaylistMusica", "tokListarMusicaPlaylist", "listarMusicaPlaylist", fault, resultListarMusicaPlaylist,
+					evento.eveReferencia);
+				}
+				else if(evento.eveTipo == 'S' && evento.nomeReferencia == "")
+				{
+					ServiceAlert.atencao("A música foi excluída!");
+				}
+				else if(evento.eveTipo == "L" && evento.nomeReferencia == "")
+				{
+					ServiceAlert.atencao("A playlist foi excluída!");
+				}
+			}
+			
+			private function resultListarMusicaPlaylist(event:ResultEvent):void
+			{
+				arrPlaylistMusica = event.result as ArrayCollection;
+				FlexGlobals.topLevelApplication.arrPlaylist = arrPlaylistMusica;
+			}
+			
+			protected function pesquisar(event:KeyboardEvent):void
+			{
+				arrEvento.filterFunction = filter;
+				arrEvento.refresh();
+			}
+			
+			private function filter(obj:Object):Boolean
+			{
+				var aux:String = "";
+				if(cboTipo.selectedIndex != -1)
+				{
+					aux = cboTipo.selectedItem.label;
+				}
+				
+				var datFinal:Date = ObjectUtil.copy(dataFinal.selectedDate) as Date;
+				datFinal.setDate(datFinal.getDate() + 1);
+				
+				if((obj.usuNome as String).toUpperCase().indexOf(txtBuscar.text.toUpperCase()) != -1 &&
+					(obj.eveTipo as String).toUpperCase().indexOf(aux) != -1 && 
+					obj.eveDataHora >= dataInicial.selectedDate && obj.eveDataHora <= datFinal)
+				{
+					return true;
+				} 
+				
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function pesquisarCbo(event:IndexChangeEvent):void
+			{
+				arrEvento.filterFunction = filter;
+				arrEvento.refresh();
+			}
+			
+			
+			
+			private function dateChanged(date:Date):void {
+				arrEvento.filterFunction = filter;
+				arrEvento.refresh();
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<mx:DateFormatter id="df" formatString="DD/MM/YYYY HH:NN:SS"/>
+	</fx:Declarations>
+	<s:HGroup width="100%">
+		<s:Spacer width="20"/>
+		<mx:Image id="imgRefresh" source="@Embed('Assets/refresh.png')" buttonMode="true" click="listarEvento()"/>
+		<components:ServiceLabel text="Usuário "/>
+		<s:TextInput id="txtBuscar" width="300" keyUp="pesquisar(event)"/>
+		<components:ServiceLabel text="Tipos "/>
+		<components:ServiceDropDown id="cboTipo" dataProvider="{arrTipo}" change="pesquisarCbo(event)"/>
+		<components:ServiceLabel text="Data "/>
+		<mx:DateField id="dataInicial" 
+					  formatString="DD/MM/YYYY" 
+					  dayNames="['D','S','T','Q','Q','S','S']" 
+					  monthNames="['Janeiro','Fevereiro','Março','Abril',
+					  'Maio','Junho','Julho','Agosto','Setembro','Outubro',
+					  'Novembro','Dezembro']" 
+					  disabledDays="[0,6]" width="20%" change="dateChanged(DateField(event.target).selectedDate)"/>
+		<components:ServiceLabel width="27" text="até "/>
+		<mx:DateField id="dataFinal" 
+					  formatString="DD/MM/YYYY" 
+					  dayNames="['D','S','T','Q','Q','S','S']" 
+					  monthNames="['Janeiro','Fevereiro','Março','Abril',
+					  'Maio','Junho','Julho','Agosto','Setembro','Outubro',
+					  'Novembro','Dezembro']" 
+					  disabledDays="[0,6]" width="20%" change="dateChanged(DateField(event.target).selectedDate)"/>
+	</s:HGroup>
+	<mx:AdvancedDataGrid id="gridEvento" width="100%" height="100%" designViewDataType="flat"
+						 dataProvider="{arrEvento}">
+		<mx:columns>
+			<mx:AdvancedDataGridColumn dataField="eveCodigo" headerText="Código" width="70"/>
+			<mx:AdvancedDataGridColumn dataField="eveTipo" headerText="Tipo" width="70"/>
+			<mx:AdvancedDataGridColumn dataField="eveDescricao" headerText="Descricao"/>
+			<mx:AdvancedDataGridColumn dataField="eveReferencia" headerText="Codigo Ref" width="100"/>
+			<mx:AdvancedDataGridColumn dataField="nomeReferencia" headerText="Referência" width="175"/>
+			<mx:AdvancedDataGridColumn dataField="eveDataHora" headerText="Data e Hora" formatter="{df}" width="175"/>
+			<mx:AdvancedDataGridColumn dataField="usuNome" headerText="Usuário" width="175"/>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image id="imgPlay" source="@Embed('Assets/executar.png')" useHandCursor="true" buttonMode="true"
+									 visible="{data.eveTipo == 'S' || data.eveTipo == 'L'}"
+									 click="outerDocument.ouvirEvento(event)"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</mx:columns>
+	</mx:AdvancedDataGrid>
+</containers:MDIWindowCustom>

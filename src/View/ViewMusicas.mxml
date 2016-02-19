@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							xmlns:components="components.*"
+							width="788" height="606" layout="vertical" paddingBottom="5"
+							paddingLeft="5" paddingRight="5" paddingTop="5"
+							title="Cadastro de Músicas" creationComplete="onInit(event)" maximizeRestoreOption="true" resizable="true">
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator source="{txtNome}" property="text"
+								required="true" requiredFieldError="Insira uma música"/>
+			<s:NumberValidator source="{cboGenero}" property="selectedIndex"
+							   allowNegative="false" minValue="0" 
+							   lessThanMinError="Selecione o genêro" negativeError="Selecione o genêro"/>
+			
+		</fx:Array>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import Model.Artista;
+			import Model.Funcoes;
+			import Model.ModelLocatorLogin;
+			import Model.Musicas;
+			
+			import RemoteObject.RemoteCall;
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.ObjectUtil;
+			import mx.validators.Validator;
+			
+			import spark.components.List;
+			[Bindable]private var arrMusicas:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrGeneros:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrArtistas:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrAlbuns:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrMusicasInseridas:ArrayCollection = new ArrayCollection();
+			[Bindable]private var musica:Musicas = new Musicas();
+			//[Bindable]private var arquivo:FileReference = new FileReference();
+			private var fileRef:FileReferenceList = new FileReferenceList();
+			[Bindable]private var editando:Boolean = false;
+			[Bindable]private var arrArquivo:ArrayCollection = new ArrayCollection();
+			[Bindable]private var request:URLRequest = new URLRequest();
+			
+			private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				listarMusicas();	
+			}
+			
+			private function listarMusicas():void
+			{
+				RemoteDestination.Remote("Musica", "tokGravar", "listarMusicas", fault, resultListarMusicas);
+			}
+			
+			private function resultListarMusicas(event:ResultEvent):void
+			{
+				arrMusicas = event.result as ArrayCollection;
+				listarGenero();
+			}
+			
+			private function listarGenero():void
+			{
+				RemoteDestination.Remote("Genero", "tokListarGenero", "listarGenero", fault, resultListarGenero);
+			}
+			
+			private function resultListarGenero(event:ResultEvent):void
+			{
+				arrGeneros = event.result as ArrayCollection;
+				listarArtista();
+			}
+			
+			private function listarArtista():void
+			{
+				RemoteDestination.Remote("Artista", "tokListarArtista", "listarArtistas", fault, resultListarArtista);
+			}
+			
+			private function resultListarArtista(event:ResultEvent):void
+			{
+				arrArtistas = event.result as ArrayCollection;
+				listarAlbuns();
+			}
+			
+			private function listarAlbuns():void
+			{
+				RemoteDestination.Remote("Album", "tokListarAlbum", "listarAlbumArtista", fault, resultListarAlbum, 
+					cboArtista.selectedIndex == -1 ? 0 : cboArtista.selectedItem.artCodigo); 
+			}
+			
+			private function resultListarAlbum(event:ResultEvent):void
+			{
+				arrAlbuns = event.result as ArrayCollection;
+				cboAlbum.clearDrop()
+				cboAlbum.selectedIndex = 0;
+				if(musica.albCodigo > 0)
+				{
+					cboAlbum.setValorDrop("albCodigo", musica.albCodigo);
+				}
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				if(event.fault.toString().indexOf("The DELETE statement conflicted with the REFERENCE constraint ") != -1)
+				{
+					ServiceAlert.erro("Não é possível excluir a música pois a mesma possui vinculos!");	
+				}
+				else
+				{
+					ServiceAlert.erro("Erro! " + event.fault.message);
+				}
+			}
+			
+			protected function selecionarMusica(event:MouseEvent):void
+			{
+				fileRef = new FileReferenceList();
+				fileRef.addEventListener(Event.SELECT, onSelecionar);
+				fileRef.addEventListener(IOErrorEvent.IO_ERROR, onError);
+				fileRef.browse([new FileFilter("Musicas","*.mp3;*.wma")]);
+				
+				/*arquivo = new FileReference();
+				arquivo.browse([new FileFilter("Musicas","*.mp3;*.wma")]);      
+				arquivo.addEventListener(Event.SELECT, onSelecionar);
+				arquivo.addEventListener(IOErrorEvent.IO_ERROR, onError);*/
+			}
+			
+			protected function onError(event:IOErrorEvent):void
+			{
+				ServiceAlert.erro("Erro! " + event.text);
+			}
+			
+			public function onSelecionar(event:Event):void{     
+				request.url = Funcoes.URLServer() + "/uploadMusica.ashx";
+				//request.url = "http://localhost:4545/TreinamentoWillian/uploadMusica.ashx";
+				request.method = URLRequestMethod.POST;
+				//file.addEventListener(Event.COMPLETE, avancaProgress);
+				//arquivo.addEventListener(ProgressEvent.PROGRESS, progressHandler);
+				
+				var jaexistem:String = "";
+				for(var i:int=0;i< fileRef.fileList.length; i++)
+				{
+					var inserir:Boolean = true;
+					for each (var mus:Musicas in arrMusicas) 
+					{
+						if(mus.musNome == fileRef.fileList[i].name)
+						{
+							jaexistem += fileRef.fileList[i].name+"\n";
+							inserir = false;
+						}
+					}
+					
+					for each (var musi:Musicas in arrMusicasInseridas) 
+					{
+						if(musi.musNome == fileRef.fileList[i].name)
+						{
+							jaexistem += fileRef.fileList[i].name+"\n"; 
+							inserir = false;
+						}
+					}
+					if(inserir)
+					{
+						var musica:Musicas = new Musicas
+						musica.musNome = fileRef.fileList[i].name;
+						arrArquivo.addItem(fileRef.fileList[i]);
+						arrMusicasInseridas.addItem(musica);
+					}
+				}
+				if(jaexistem.length > 0)
+				{
+					ServiceAlert.atencao("As Seguintes músicas não foram incluídas, porque já existem: \n" + jaexistem);
+				}
+				
+			}
+			
+			private function inserirMusica():void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(hasErrors.length == 0)
+				{
+					if(editando == false)
+					{	
+						musica.musCodigo = 0;
+					}
+					
+					musica.musNome = txtNome.text;
+					
+					if(chkAssumirTodas.selected)
+					{
+						for each (var m:Musicas in arrMusicasInseridas) 
+						{
+							if(cboArtista.selectedIndex != -1 && cboAlbum.selectedIndex != -1)
+							{
+								m.albCodigo = cboAlbum.selectedItem.albCodigo;
+								m.albNome = cboAlbum.selectedItem.albNome;
+								m.artNome = cboArtista.selectedItem.artNome;
+							}
+							else
+							{
+								m.albCodigo = 0;
+								m.albNome = null;
+								m.artNome = null;
+							}
+						}
+					}
+					else
+					{
+						if(cboArtista.selectedIndex != -1 && cboAlbum.selectedIndex != -1)
+						{
+							musica.albCodigo = cboAlbum.selectedItem.albCodigo;
+							musica.albNome = cboAlbum.selectedItem.albNome;
+							musica.artNome = cboArtista.selectedItem.artNome;
+						}
+						else
+						{
+							musica.albCodigo = 0;
+							musica.albNome = null;
+							musica.artNome = null;
+						}
+						musica.genNome = cboGenero.selectedItem.genNome;
+						musica.genCodigo = cboGenero.selectedItem.genCodigo;
+						
+						for each (var mus:Musicas in arrMusicasInseridas) 
+						{
+							if(musica.musCodigo > 0 && musica.musCodigo == mus.musCodigo)
+							{
+								arrMusicasInseridas.setItemAt(musica, arrMusicasInseridas.getItemIndex(m));
+								limparCampos();
+								return;
+							}
+							if(musica.musNome == mus.musNome)
+							{
+								arrMusicasInseridas.setItemAt(musica, arrMusicasInseridas.getItemIndex(m));
+								limparCampos();
+								return;
+							}
+						}
+						
+						arrMusicasInseridas.addItem(musica);
+						musica = new Musicas ();
+						limparCampos();	
+						editando = false;
+					}
+				}else
+				{
+					ServiceAlert.atencao("Verifique os campos em vermelho");
+				}
+			}
+			
+			private function resultGravarMusica(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Música " + event.result + " salva com sucesso!");
+			}
+			
+			public function clickEditar(event:MouseEvent):void
+			{
+				editando = true;
+				musica = ObjectUtil.copy(gridMusicasInseridas.selectedItem) as Musicas;
+				listarAlbuns();
+				
+			}
+			
+			private function limparCampos():void
+			{
+				musica = new Musicas();
+				txtNome.text = "";
+				cboGenero.selectedIndex = -1;
+				cboArtista.selectedIndex = -1;
+				cboAlbum.selectedIndex = -1;
+			}
+			
+			public function clickExcluir(event:MouseEvent):void
+			{
+				musica = ObjectUtil.copy(gridMusicasInseridas.selectedItem) as Musicas;
+				editando = false;
+				ServiceAlert.confirmacao("Confirma exclusão?", excluirMusicaInserida);
+			}
+			
+			private function excluirMusicaInserida(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					arrMusicasInseridas.removeItemAt(gridMusicasInseridas.selectedIndex);
+					limparCampos();
+				}
+			}
+			
+			private function excluirMusica(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					RemoteDestination.Remote("Musica", "tokExcluir", "excluirMusica", fault, resultExcluirMusica, musica.musCodigo,
+						__modelLocator.usuarioLogado.usuCodigo);
+				}
+			}
+			
+			private function resultExcluirMusica(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Música " + event.result + " excluída com sucesso!");
+				listarMusicas();
+				musica = new Musicas();
+				limparCampos();
+			}
+			
+			protected function clickGravar(event:MouseEvent):void
+			{
+				var indice:int = 0;
+				uploadMusic();
+				hgProgress.visible = true;
+				hgProgress.includeInLayout = true;
+				function uploadMusic():void
+				{
+					pgProgresso.label = "Enviando Musica " + (indice+1) + "/" + fileRef.fileList.length;
+					(fileRef.fileList[indice] as FileReference).addEventListener(Event.COMPLETE, complete);
+					(fileRef.fileList[indice] as FileReference).addEventListener(ProgressEvent.PROGRESS, progressHandler);
+					(fileRef.fileList[indice] as FileReference).upload(request);
+				}
+				
+				function complete(evento:Event):void
+				{
+					(fileRef.fileList[indice] as FileReference).removeEventListener(Event.COMPLETE, complete);
+					(fileRef.fileList[indice] as FileReference).removeEventListener(ProgressEvent.PROGRESS, progressHandler);
+					if((indice +1) == fileRef.fileList.length)
+					{
+						hgProgress.visible = false;
+						hgProgress.includeInLayout = false;
+						RemoteDestination.Remote("Musica", "tokGravar", "gravarMusica", fault, resultGravar, arrMusicasInseridas, 
+							__modelLocator.usuarioLogado.usuCodigo);
+					}
+					else
+					{
+						indice++;
+						uploadMusic();
+					}
+				}
+				
+				function progressHandler(evento:ProgressEvent):void
+				{
+					pgProgresso.setProgress(evento.bytesLoaded, evento.bytesTotal);
+				}
+			}
+			
+			private function resultGravar(event:ResultEvent):void
+			{
+				btnNovaPlay.label = "Nova Playlist";
+				txtNovaPlay.visible = false;
+				txtNovaPlay.includeInLayout = false;
+				ServiceAlert.sucesso(event.result + " músicas inseridas ou editadas");
+				listarMusicas();
+				arrMusicasInseridas.removeAll();
+			}
+			
+			protected function addPlaylist(event:MouseEvent):void
+			{
+				if(btnNovaPlay.label == "Nova Playlist")
+				{
+					txtNovaPlay.visible = true;
+					txtNovaPlay.includeInLayout = true;
+					btnNovaPlay.label = "Salvar Nova Playlist";
+				}
+				else
+				{
+					if(txtNovaPlay.text != "")
+					{
+						var indice:int = 0;
+						uploadMusic();
+						hgProgress.visible = true;
+						hgProgress.includeInLayout = true;
+						function uploadMusic():void
+						{
+							pgProgresso.label = "Enviando Musica " + (indice+1) + "/" + fileRef.fileList.length;
+							(fileRef.fileList[indice] as FileReference).addEventListener(Event.COMPLETE, complete);
+							(fileRef.fileList[indice] as FileReference).addEventListener(ProgressEvent.PROGRESS, progressHandler);
+							(fileRef.fileList[indice] as FileReference).upload(request);
+						}
+						
+						function complete(evento:Event):void
+						{
+							(fileRef.fileList[indice] as FileReference).removeEventListener(Event.COMPLETE, complete);
+							(fileRef.fileList[indice] as FileReference).removeEventListener(ProgressEvent.PROGRESS, progressHandler);
+							if((indice +1) == fileRef.fileList.length)
+							{
+								hgProgress.visible = false;
+								hgProgress.includeInLayout = false;
+								RemoteDestination.Remote("Musica", "tokGravarWihtPlay", "salvarComoPlaylist", fault, resultGravar, 
+									txtNovaPlay.text, arrMusicasInseridas, __modelLocator.usuarioLogado.usuCodigo);
+							}
+							else
+							{
+								indice++;
+								uploadMusic();
+							}
+						}
+						
+						function progressHandler(evento:ProgressEvent):void
+						{
+							pgProgresso.setProgress(evento.bytesLoaded, evento.bytesTotal);
+						}
+					}
+					else
+					{
+						ServiceAlert.atencao("Informe um nome para a playlist!");
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Música: "/>
+		<s:TextInput id="txtNome" width="100%" enabled="false" text="{musica.musNome}"/>
+		<components:ServiceButton tipoBotao="buscar" width="82" click="selecionarMusica(event)" />
+	</s:HGroup>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Genêro: "/>
+		<components:ServiceDropDown id="cboGenero" width="100%" 
+									dataProvider="{arrGeneros}" labelField="genNome"
+									selectedProperty="genNome" selectedValue="{musica.genNome}"/>
+		<components:ServiceLabel text="Artista: "/>
+		<components:ServiceDropDown id="cboArtista" width="100%" dataProvider="{arrArtistas}" 
+									labelField="artNome" change="listarAlbuns()"
+									selectedProperty="artNome" selectedValue="{musica.artNome}"/>
+	</s:HGroup>
+	<s:HGroup width="100%">
+		<components:ServiceLabel text="Album: "/>
+		<components:ServiceDropDown id="cboAlbum" width="100%" 
+									dataProvider="{arrAlbuns}" labelField="albNome"
+									selectedProperty="albCodigo" selectedValue="{musica.albCodigo}"/>
+		<s:CheckBox id="chkAssumirTodas" height="100%" label="Assumir para todas as músicas"/>
+		<components:ServiceButton tipoBotao="adicionar" width="82" label="Inserir" click="inserirMusica()"/>
+		<components:ServiceButton click="limparCampos()" tipoBotao="limpar"/>
+	</s:HGroup>
+	<s:HGroup width="100%" horizontalAlign="center">
+		<s:Label height="100%" fontSize="14" fontWeight="bold" text="Musicas selecionadas"/>
+	</s:HGroup>
+	<s:HGroup width="100%" height="100%">
+		<mx:AdvancedDataGrid id="gridMusicasInseridas" width="100%" height="100%" designViewDataType="flat" dataProvider="{arrMusicasInseridas}">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn dataField="musNome" headerText="Musica"/>
+				<mx:AdvancedDataGridColumn dataField="albNome" headerText="Album"/>
+				<mx:AdvancedDataGridColumn dataField="artNome" headerText="Artista"/>
+				<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+								<s:Image id="imgEditarInserida" source="@Embed('Assets/edit.png')" useHandCursor="true" buttonMode="true" click="outerDocument.clickEditar(event)"/>
+							</mx:VBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+				<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+								<s:Image id="imgExcluirInserida" source="@Embed('Assets/delete.png')" useHandCursor="true" buttonMode="true" 
+										 click="outerDocument.clickExcluir(event)"/>
+							</mx:VBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+	</s:HGroup>
+	<s:HGroup id="hgProgress" width="100%" includeInLayout="false" visible="false">
+		<mx:ProgressBar mode="manual" width="100%" id="pgProgresso" labelPlacement="center" label=""/>
+	</s:HGroup>
+	<s:HGroup width="100%" horizontalAlign="right">
+		<s:TextInput id="txtNovaPlay" includeInLayout="false" visible="true"/>
+		<s:Button id="btnNovaPlay" label="Nova Playlist" click="addPlaylist(event)"/>
+		<components:ServiceButton id="btnGravar" tipoBotao="gravar" click="clickGravar(event)"/>
+	</s:HGroup>
+</containers:MDIWindowCustom>

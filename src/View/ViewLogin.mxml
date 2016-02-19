@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   width="400" height="248" title="Login"
+			   creationComplete="onInit(event)" xmlns:containers="components.mdi.containers.*">
+	<s:layout>
+		<s:VerticalLayout paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5"/>
+	</s:layout>
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Email;
+			import Model.ModelLocatorLogin;
+			import Model.Usuario;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.MenuEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.validators.Validator;
+			
+			private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			private var evento:Event = new Event("logar");
+			[Bindable]private var arrUsuarios:ArrayCollection = new ArrayCollection();
+			//Instancia de um cookie apra armazenar  no navegador
+			private var cookie:SharedObject = SharedObject.getLocal("cookieLogin");
+			[Bindable]private var usuario:Usuario = new Usuario();
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				this.closeButton.visible = false;
+				
+				//verifico se existem dados nos cookies
+				if(cookie.data.hasOwnProperty("usuario"))
+				{
+					txtUsuario.text = cookie.data.usuario;
+					txtSenha.text = cookie.data.senha;
+					//checkbox lembrar senha
+					chkLembrar.selected = true;
+					
+					callLater(function():void
+					{
+						//bota Entrar\/
+						btnEntrar.setFocus();
+					});
+				}
+					
+				else
+				{
+					callLater(function():void{
+						focusManager.setFocus(txtUsuario);
+					});
+				}
+			}
+			
+			
+			private function fault(event:FaultEvent):void
+			{
+				ServiceAlert.erro(event.fault.toString());	
+			}
+			protected function logar(event:MouseEvent):void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(hasErrors.length == 0)
+				{
+					usuario.usuEmail = txtUsuario.text;
+					usuario.usuSenha = txtSenha.text;
+					RemoteDestination.Remote("Usuario", "tokLogar", "logarUsuario", fault, resultLogar, usuario);
+				}
+				else
+				{
+					ServiceAlert.atencao("Verifique os campos em vermelho", trataFoto);
+				}
+				
+				function trataFoto(event:CloseEvent):void
+				{
+					hasErrors[0].target.source.setFocus();
+				}
+			}
+			
+			private function resultLogar(event:ResultEvent):void
+			{
+				if((event.result as Usuario).usuCodigo > 0)
+				{
+					if(chkLembrar.selected)
+					{
+						cookie.data.usuario = txtUsuario.text;
+						cookie.data.senha = txtSenha.text;
+						cookie.flush();
+					}
+					else
+					{
+						cookie.clear();
+					}
+					
+					__modelLocator.usuarioLogado = event.result as Usuario;
+					this.dispatchEvent(evento);
+					PopUpManager.removePopUp(this);
+				}
+				else
+				{
+					ServiceAlert.atencao("Usuário ou senha inválidos!");
+				}
+			}
+			
+			protected function enviarSenha(event:MouseEvent):void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(hasErrors.length == 0)
+				{
+					ServiceAlert.confirmacao("Deseja enviar sua senha por e-mail?", confirmacao);
+				}
+			}
+			
+			private function confirmacao(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					RemoteDestination.Remote("Usuario", "tokListar", "listarUsuarios", fault, resultListarUsuarios);
+				}
+				else
+				{
+					
+				}
+			}
+			
+			private function resultListarUsuarios(event:ResultEvent):void
+			{
+				arrUsuarios = event.result as ArrayCollection;
+				enviarEmail();
+			}
+			
+			private function enviarEmail():void
+			{
+				
+				for each (var u:Usuario in arrUsuarios) 
+				{
+					if(u.usuEmail == txtUsuario.text)
+					{
+						var email:Email = new Email();
+						email.assunto = "Sua senha";
+						email.assunto = "Sua senha é : " + u.usuSenha;
+						email.destinatario = u.usuEmail;
+						RemoteDestination.Remote("Email", "tokEnviarEmail", "enviarEmail", fault, resultEnviarEmail, email);
+						break;
+					}
+				}
+			}
+			
+			private function resultEnviarEmail(event:ResultEvent):void
+			{
+				if(event.result == true)
+				{
+					ServiceAlert.sucesso("Sua senha foi enviada para " + txtUsuario.text);
+				}
+				else
+				{
+					ServiceAlert.erro("Erro ao enviar e-mail");
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator required="true" source="{txtUsuario}"
+								property="text" requiredFieldError="Informe o Usuário!"/>
+			<mx:StringValidator required="true" source="{txtSenha}"
+								property="text" requiredFieldError="Informe a Senha!"/>
+			<mx:EmailValidator source="{txtUsuario}" property="text"
+							   invalidCharError="Caracteres inválidos!"
+							   invalidDomainError="Domínio inválido!"
+							   invalidIPDomainError="Ip inválido!"
+							   invalidPeriodsInDomainError="Pontuação inválida!"
+							   missingAtSignError="Insira o símbolo de @!"
+							   missingPeriodInDomainError="Insira o símbolo .!"
+							   missingUsernameError="Faltando nome no e-mail"
+							   requiredFieldError="Informe um e-mail"
+							   tooManyAtSignsError="Infome somente um símbolo de @!"/>
+		</fx:Array>
+	</fx:Declarations>
+	
+	<s:controlBarContent>
+		<s:HGroup width="100%" horizontalAlign="right">
+			<s:Button id="btnEntrar" label="Entrar" click="logar(event)"/>
+		</s:HGroup>
+	</s:controlBarContent>
+	<s:Form width="100%" height="100%">
+		<s:FormItem width="100%" label="Usuário:">
+			<s:TextInput id="txtUsuario" width="100%"/>
+		</s:FormItem>
+		<s:FormItem width="100%" label="Senha:" >
+			<s:TextInput id="txtSenha" x="0" width="100%" displayAsPassword="true"/>
+		</s:FormItem>
+		<s:FormItem width="100%">
+			<s:CheckBox id="chkLembrar" label="Lembrar Senha"/>
+			<s:Button label="Esqueceu sua senha?" click="enviarSenha(event)"/>
+		</s:FormItem>
+	</s:Form>
+</s:TitleWindow>

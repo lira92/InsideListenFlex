@@ -1,0 +1,774 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600"
+			   creationComplete="OnInit(event)" xmlns:containers="components.mdi.containers.*" xmlns:components="components.*">
+	<fx:Style source="index.css"/>
+	<s:states>
+		<s:State name="index"/>
+		<s:State name="Play"/>
+	</s:states>
+	<fx:Declarations>
+		<fx:XMLList id="xmlmenus">
+			<menuitem label="Cadastros">
+				<menuitem id="cadUsuario" label="Usuário"/>
+				<menuitem id="cadArtista" label="Artista"/>
+				<menuitem id="cadAlbum" label="Album"/>
+				<menuitem id="cadPlaylist" label="Playlist"/>
+				<menuitem id="cadGenero" label="Genero"/>
+				<menuitem id="cadMusica" label="Musica"/>
+			</menuitem>
+			<menuitem label="Eventos">
+				<menuitem id="conEvento" label="Consulta de eventos"/>
+				<menuitem id="eveGrafico" label="Gráficos"/>
+			</menuitem>
+		</fx:XMLList>
+		
+		<mx:Zoom id="zoomAll" zoomWidthTo="1" zoomHeightTo="1" zoomWidthFrom=".7" zoomHeightFrom=".7"/>
+	</fx:Declarations>
+	
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Evento;
+			import Model.Funcoes;
+			import Model.ModelLocatorLogin;
+			import Model.Musicas;
+			import Model.Playlist;
+			import Model.PlaylistMusica;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import View.ViewAlbum;
+			import View.ViewCadArtista;
+			import View.ViewConsultarUsuarios;
+			import View.ViewEvento;
+			import View.ViewGenero;
+			import View.ViewGraficos;
+			import View.ViewLogin;
+			import View.ViewMusicas;
+			import View.ViewPlaylist;
+			
+			import components.ServiceAlert;
+			import components.mdi.containers.MDIWindowCustom;
+			import components.mdi.events.MDIWindowEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.MenuEvent;
+			import mx.logging.Log;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			
+			[Bindable]private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			private var login:ViewLogin;
+			
+			//Player===============================================================================\\
+			[Bindable]private var _musica:Musicas = new Musicas();
+			[Bindable]private var _arrPlaylist:ArrayCollection = new ArrayCollection();
+			[Bindable]private var soundString:URLRequest;
+			[Bindable]private var sound:Sound = new Sound();
+			[Bindable]private var soundChannel:SoundChannel = new SoundChannel();
+			[Bindable]private var sTrans:SoundTransform = new SoundTransform();
+			[Bindable]private var soundPosition:Number = 0;
+			[Bindable]private var arrEvento:ArrayCollection = new ArrayCollection();
+			[Bindable]private var shuffle:Boolean = false;
+			private var contador:int = 0;
+			private var segundos:Timer = new Timer(1000);
+			public var tocando:Boolean = false;
+			private var _musicasSorteadas:Array = new Array();
+			//=====================================================================================\\
+			
+			protected function OnInit(event:FlexEvent):void{
+				if(ExternalInterface.available)
+				{
+					ExternalInterface.call("eval", "document.getElementById('" + ExternalInterface.objectID + "').tabIndex=0");
+					ExternalInterface.call("eval", "document.getElementById('" + ExternalInterface.objectID + "').focus()");
+				}
+				var login:ViewLogin = new ViewLogin();
+				login.addEventListener("logar", atualizarUsuario);
+				PopUpManager.addPopUp(login, this, true);
+				PopUpManager.centerPopUp(login);
+			}
+			
+			public function get getIndexAtual():int
+			{
+				return contador;
+			}
+			
+			private function listarTop():void
+			{
+				RemoteDestination.Remote("PlaylistMusica", "tokListarTop", "listarTop", fault, resultListarTop);
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				ServiceAlert.erro("Erro! " + event.fault.message);
+			}
+			
+			private function resultListarTop(event:ResultEvent):void
+			{
+				arrPlaylist = event.result as ArrayCollection;
+				
+				listarEvento();
+			}
+			
+			private function atualizarUsuario(event:Event):void
+			{
+				__modelLocator = ModelLocatorLogin.getInstance();
+				/* if(__modelLocator.usuarioLogado.usuAdmin == false){
+				xmlmenus[0].children()[0].@enabled = false;
+				xmlmenus[0].children()[1].@enabled = false;
+				xmlmenus[0].children()[5].@enabled = false;
+				} */
+				user.visible = true;
+				user.includeInLayout = true;
+				
+				//listarTop();
+				listarEvento();
+			}
+			
+			private function listarEvento():void
+			{
+				RemoteDestination.Remote("Evento", "tokListar", "listarEvento", fault, resultListarEvento);
+			}
+			
+			private function resultListarEvento(event:ResultEvent):void
+			{
+				arrEvento = event.result as ArrayCollection;
+			}
+			
+			protected function menuClick(event:MenuEvent):void
+			{
+				switch(event.item.@id.toString())
+				{
+					case "cadUsuario":
+					{
+						var cadusuario:ViewConsultarUsuarios = new ViewConsultarUsuarios();
+							addCenterMDIWindowCustom(mdiCanvas, cadusuario);
+						break;
+					}
+					case "cadArtista":
+					{
+						var cadArtista:ViewCadArtista = new ViewCadArtista();
+						addCenterMDIWindowCustom(mdiCanvas, cadArtista);
+						break;
+					}
+					case "cadAlbum":
+					{
+						var cadAlbum:ViewAlbum = new ViewAlbum();
+						addCenterMDIWindowCustom(mdiCanvas, cadAlbum);
+						break;
+					}
+					case "cadPlaylist":
+					{
+						var cadPlaylist:ViewPlaylist = new ViewPlaylist();
+						addCenterMDIWindowCustom(mdiCanvas, cadPlaylist);
+						break;
+					}
+					case "cadGenero":
+					{
+						var cadGenero:ViewGenero = new ViewGenero();
+						addCenterMDIWindowCustom(mdiCanvas, cadGenero);
+						break;
+					}
+					case "cadMusica":
+					{
+						var cadMusica:ViewMusicas = new ViewMusicas();
+						addCenterMDIWindowCustom(mdiCanvas, cadMusica);
+						break;
+					}
+					case "conEvento":
+					{
+						var conEvento:ViewEvento = new ViewEvento();
+						addCenterMDIWindowCustom(mdiCanvas, conEvento);
+						break;
+					}
+					case "eveGrafico":
+					{
+						var eveGrafico:ViewGraficos = new ViewGraficos();
+						addCenterMDIWindowCustom(mdiCanvas, eveGrafico);
+						break;
+					}
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			public function addCenterMDIWindowCustom(mdiCanvas:components.mdi.containers.MDICanvas, window:MDIWindowCustom):void{
+				var finalWindow:MDIWindowCustom = null;
+				var windows:Array = mdiCanvas.windowManager.windowList;
+				var estaAberta:Boolean=false;
+				if(window.className=="MENU01"){
+					mdiCanvas.windowManager.add(window);
+					window.x = this.mdiCanvas.width / 2 - window.width / 2;
+					window.y = this.mdiCanvas.height / 2 - window.height / 2;
+					if(window.parent == window){
+						window.addEventListener(MDIWindowEvent.CLOSE, function():void{
+							window.removeChild(window);
+							window.removeEventListener(MDIWindowEvent.CLOSE, addCenterMDIWindowCustom);
+						});     
+					}
+				}else{
+					for(var i:int=0 ; i < windows.length ; i++){
+						if(windows[i].className.toString()==window.className){
+							finalWindow = windows[i] as MDIWindowCustom;
+							estaAberta=true;
+							i = windows.length-1;
+						}
+					}
+					if(estaAberta){
+						finalWindow.showControls = true;
+						if(finalWindow.minimized){
+							finalWindow.restore();
+						}
+						mdiCanvas.windowManager.bringToFront(finalWindow);
+					}else{
+						mdiCanvas.windowManager.add(window);
+						window.x = this.mdiCanvas.width / 2 - window.width / 2;
+						window.y = this.mdiCanvas.height / 2 - window.height / 2;
+						if(window.parent == window){
+							window.addEventListener(MDIWindowEvent.CLOSE, function():void{
+								window.removeChild(window);
+								window.removeEventListener(MDIWindowEvent.CLOSE, addCenterMDIWindowCustom);
+							});     
+						} 
+					}
+				}
+			}
+			
+			public function doZoom(event:MouseEvent):void {
+				if (zoomAll.isPlaying) {
+					zoomAll.reverse();
+				}
+				else {
+					// If this is a ROLL_OUT event, play the effect backwards. 
+					// If this is a ROLL_OVER event, play the effect forwards.
+					zoomAll.play([event.target], event.type == MouseEvent.ROLL_OUT ? true : false);
+				}
+			}
+			private function smoothImage(ev:Event):void{
+				//set image smoothing so image looks better when transformed.
+				var bmp:Bitmap = ev.target.content as Bitmap;
+				bmp.smoothing = true;
+			}
+			
+			
+			//Player===============================================================================\\
+			public function set musica(value:Musicas):void{
+				_arrPlaylist = new ArrayCollection();
+				_musica = new Musicas();
+				soundStop();
+				contador = 0;
+				this._musica = value;
+				if(currentState != 'Play')
+				{
+					currentState = 'Play';
+				}
+				soundLoad();
+			}
+			//=====================================================================================\\
+			public function set arrPlaylist(value:ArrayCollection):void
+			{
+				_arrPlaylist = new ArrayCollection();
+				_musica = new Musicas();
+				soundStop();
+				contador = 0;
+				this._arrPlaylist = value;
+				if(currentState != 'Play')
+				{
+					currentState = 'Play';
+				}
+				soundLoad(); 
+			}
+			
+			public function get arrPlaylist():ArrayCollection
+			{
+				return _arrPlaylist;
+			}
+			
+			//=====================================================================================\\
+			protected function onInit(event:FlexEvent):void
+			{
+				soundString = new URLRequest(Funcoes.URLServer() + '/Musicas/' + _musica.musNome);
+				//soundLoad();   
+			}
+			//=====================================================================================\\
+			private function soundLoad():void{
+				sound = new Sound();
+				
+				if(_arrPlaylist.length > 0)
+				{
+					soundString = new URLRequest(Funcoes.URLServer() + '/Musicas/' + _arrPlaylist[contador].musNome);
+				}
+				else
+				{
+					soundString = new URLRequest(Funcoes.URLServer() + '/Musicas/' + _musica.musNome);
+				}
+				gridPlaylist.dataProvider.refresh();
+				gridPlaylist.scrollToIndex(contador);
+				sound.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+				sound.addEventListener(Event.COMPLETE, onComplete);
+				sound.load(soundString);
+			}
+			//=====================================================================================\\
+			private function onComplete(e:Event):void{
+				hsProgress.maximum = sound.length;
+				soundPlay();
+			}
+			//=====================================================================================\\
+			private function errorHandler(errorEvent:IOErrorEvent):void{
+				Alert.show("The sound could not be loaded: " + errorEvent.text);
+			}
+			//=====================================================================================\\
+			public function soundPlay():void{
+				if(!tocando){
+					soundChannel = sound.play(soundPosition);
+					segundos.addEventListener(TimerEvent.TIMER, setaProgresso);
+					soundChannel.addEventListener(Event.SOUND_COMPLETE, musicaEncerrada);
+					segundos.start();
+					tocando = true;
+					
+					if(_arrPlaylist.length > 0)
+					{
+						lblMusica.text= _arrPlaylist[contador].musNome;
+					}
+					else
+					{
+						lblMusica.text= _musica.musNome;
+					}
+					
+				}
+			}
+			//=====================================================================================\\
+			protected function backPlay(event:MouseEvent):void
+			{
+				soundStop();
+				if(shuffle)
+				{
+					contador = _musicasSorteadas.pop();
+				}
+				else
+				{
+					if(contador == 0)
+					{
+						contador = _arrPlaylist.length - 1;
+					}
+					else
+					{
+						contador--;
+					}
+				}
+				
+				soundLoad();
+			}
+			//=====================================================================================\\
+			protected function nextPlay(event:MouseEvent):void
+			{
+				soundStop();
+				if(shuffle)
+				{
+					var indiceSort:int = randNumber();
+					while(_musicasSorteadas.indexOf(indiceSort) != -1)
+					{
+						if(_musicasSorteadas.length >= _arrPlaylist.length)
+						{
+							_musicasSorteadas = new Array();
+						}
+						indiceSort = randNumber();
+					}
+					_musicasSorteadas.push(indiceSort);
+					contador = randNumber();
+				}
+				else
+				{
+					if(contador < _arrPlaylist.length - 1)
+					{
+						contador++;
+					}
+					else
+					{
+						contador = 0;
+					}
+				}
+				
+				soundLoad();
+			}
+			//=====================================================================================\\
+			public function soundPause():void{
+				tocando = false;
+				soundPosition = soundChannel.position;
+				soundChannel.stop();
+				segundos.stop();
+				sound.removeEventListener(ProgressEvent.PROGRESS, setaProgresso);
+			}
+			//=====================================================================================\\
+			private function soundStop():void{
+				tocando = false;
+				soundPosition = 0;
+				soundChannel.stop();
+				segundos.stop();
+				sound.removeEventListener(ProgressEvent.PROGRESS, setaProgresso);
+			}
+			//=====================================================================================\\
+			private function setaProgresso(event:TimerEvent):void{
+				hsProgress.value = soundChannel.position;				
+			}
+			//=====================================================================================\\
+			private function musicaEncerrada(event:Event):void{
+				soundChannel.removeEventListener(Event.SOUND_COMPLETE, musicaEncerrada);
+				soundStop();
+				
+				if(shuffle)
+				{
+					var indiceSort:int = randNumber();
+					while(_musicasSorteadas.indexOf(indiceSort) != -1)
+					{
+						if(_musicasSorteadas.length >= _arrPlaylist.length)
+						{
+							_musicasSorteadas = new Array();
+						}
+						indiceSort = randNumber();
+					}
+					_musicasSorteadas.push(indiceSort);
+					contador = randNumber();
+				}
+				else
+				{
+					if(contador < _arrPlaylist.length - 1)
+					{
+						contador++;	
+					}else
+					{
+						contador = 0;
+					}
+				}
+				
+				soundLoad();
+				
+			}
+			
+			private function randNumber():Number
+			{
+				var randI:int = 0;
+				if(_musicasSorteadas.length >= _arrPlaylist.length)
+				{
+					_musicasSorteadas = new Array();
+				}
+				else
+				{
+					randI = Math.floor(Math.random() * (_arrPlaylist.length - 0 + 1)) + 0;
+				}
+				return randI;
+			}
+			//=====================================================================================\\
+			protected function setaProgressoManual(event:Event):void{
+				soundPause();
+				soundPosition = hsProgress.value;
+				soundPlay();
+			}
+			//=====================================================================================\\
+			private function mudaVolume():void{
+				sTrans.volume = (volume.value / 100);
+				soundChannel.soundTransform = sTrans;
+			}
+			//=====================================================================================\\
+			private function close():void
+			{
+				soundChannel.stop();
+				segundos.stop();
+				PopUpManager.removePopUp(this);   
+			}
+			
+			private function myDataTipFunc(val:String):String {
+				
+				return tempoReal(val);
+			}
+			
+			private function tempoReal(val:String):String
+			{
+				var valor:Number = Number(val);
+				var minuto:int = 0;
+				var segundo:int = 0;
+				
+				minuto = int((valor / 1000)/ 60);
+				segundo = ((valor - ((minuto * 1000)* 60))/1000)
+				valor = (((minuto * 1000)* 60) /1000);
+				return padLeft(minuto + ":" + segundo, 5); /* minuto + ":" + segundo */
+			}
+			
+			/**
+			 * Formata o texto com zeros (o) à esquerda.
+			 * @param objeto Object ou String.
+			 * @param width comprimento final do texto (número inteiro).
+			 * @return retorna o texto formatado.
+			 * <p>Ex:00001</p>
+			 */
+			public static function padLeft(objeto:Object, width:int):String{
+				objeto = String(objeto);
+				var texto:String = "" + objeto;
+				while(texto.length < width)
+					texto = "0" + texto;
+				return texto;
+			}
+			
+			
+			
+			protected function abrirViewPlaylist(event:MouseEvent):void
+			{
+				var cadPlaylist:ViewPlaylist = new ViewPlaylist();
+				addCenterMDIWindowCustom(mdiCanvas, cadPlaylist);
+			}
+			
+			protected function ouvirSelecionada(event:MouseEvent):void
+			{
+				contador = gridPlaylist.selectedIndex;
+				soundStop();
+				soundLoad();
+			}
+			
+			protected function openNotificacao(event:MouseEvent):void
+			{
+				var evento:Evento = new Evento();
+				evento = listaNotificacao.selectedItem as Evento;
+				if(evento.eveTipo == 'S' && evento.nomeReferencia != "")
+				{
+					var musica:Musicas = new Musicas();
+					musica.musNome = evento.nomeReferencia;
+					this.musica = musica;
+				}
+				else if(evento.eveTipo == "L" && evento.nomeReferencia != "")
+				{
+					RemoteDestination.Remote("PlaylistMusica", "tokListarMusicaPlaylist", "listarMusicaPlaylist", fault, resultListarMusicaPlaylist,
+						evento.eveReferencia);
+				}
+				else if(evento.eveTipo == 'S' && evento.nomeReferencia == "")
+				{
+					ServiceAlert.atencao("A música foi excluída!");
+				}
+				else if(evento.eveTipo == "L" && evento.nomeReferencia == "")
+				{
+					ServiceAlert.atencao("A playlist foi excluída!");
+				}
+			}
+			
+			private function resultListarMusicaPlaylist(event:ResultEvent):void
+			{
+				arrPlaylist = event.result as ArrayCollection;
+			}
+			
+			public function myStyleFunc(data:Object, col:AdvancedDataGridColumn):Object {
+				if (data.musNome == _arrPlaylist[contador].musNome)
+				{
+					return {color:0x0000FF}; 
+				}
+				else
+				{
+					return {color:0x000000}; 
+				}  
+			}
+			
+			public function excludeFromPlaylist():void
+			{
+				_arrPlaylist.removeItemAt(gridPlaylist.selectedIndex);
+			}
+			
+			protected function gridPlaylist_copyHandler(event:Event):void
+			{
+				event.stopImmediatePropagation();
+			}
+			
+			protected function shufle(event:MouseEvent):void
+			{
+				shuffle = !shuffle;
+			}
+			
+			protected function refresh(event:MouseEvent):void
+			{
+				listarEvento();	
+			}
+			
+			protected function salvarComoNovaPlaylist(event:MouseEvent):void
+			{
+				if(txtNovaPlaylist.visible)
+				{
+					if(txtNovaPlaylist.text == "")
+					{
+						ServiceAlert.atencao("Informe o nome da playlist!");
+						return;
+					}
+					var arrMusicas:ArrayCollection = new ArrayCollection();
+					for each (var i:PlaylistMusica in _arrPlaylist) 
+					{
+						var obj:Musicas = new Musicas();
+						obj.musCodigo = i.musCodigo;
+						obj.musNome = i.musNome;
+						arrMusicas.addItem(obj);
+					}
+					
+					RemoteDestination.Remote("Musica", "tokSalvarComoPlaylist", "salvarComoPlaylistOuvidas", fault, 
+						function(e:ResultEvent):void
+						{
+							ServiceAlert.sucesso("Playlist Salva com sucesso!");
+							txtNovaPlaylist.visible = false;
+							txtNovaPlaylist.includeInLayout = false;
+							btnCancelar.visible = false;
+							btnCancelar.includeInLayout = false;
+						},
+						txtNovaPlaylist.text, arrMusicas, ModelLocatorLogin.getInstance().usuarioLogado.usuCodigo);
+				}
+				else
+				{
+					txtNovaPlaylist.visible = true;
+					txtNovaPlaylist.includeInLayout = true;
+					btnCancelar.visible = true;
+					btnCancelar.includeInLayout = true;
+				}
+			}
+			
+			protected function cancelarSalvar(event:MouseEvent):void
+			{
+				btnCancelar.visible = false;
+				btnCancelar.includeInLayout = false;
+				txtNovaPlaylist.visible = false;
+				txtNovaPlaylist.includeInLayout = false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:transitions>
+		<s:Transition fromState="index" toState="Play">
+			<s:Parallel>
+				<s:Move duration="1000" target="{hgroup}" />
+				<s:Resize duration="1000" target="{hgroup}" />
+			</s:Parallel>
+		</s:Transition>
+		<s:Transition fromState="Play" toState="index">
+			<s:Parallel>
+				<s:Move duration="1000" target="{hgroup}" />
+				<s:Resize duration="1000" target="{hgroup}" />
+			</s:Parallel>
+		</s:Transition>
+	</s:transitions>
+	
+	
+	<s:VGroup id="vgroup" width="100%" height="100%" gap="0"
+			  x.index="0">
+		<mx:MenuBar width="100%" dataProvider="{xmlmenus}" itemClick="menuClick(event)"
+					labelField="@label"
+					height="48"/>
+		
+		<s:Group width="100%" height="100%">
+			<s:BitmapImage source="@Embed('Assets/bg.png')" width="500" height="100%"/>
+			<s:List id="listaNotificacao" height="100%" contentBackgroundAlpha="0" doubleClickEnabled="true"
+					dataProvider="{arrEvento}"  styleName="listMusic" itemRenderer="renderers.rendererNotificacao" doubleClick="openNotificacao(event)"
+					width="500">
+				<s:layout >
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+			</s:List>
+			
+			<s:Button icon="@Embed('Assets/refresh.png')" id="btnEvent" width="{listaNotificacao.width}" click="refresh(event)" alpha="0.6" mouseOver="btnEvent.alpha = 1" 
+					  mouseOut="btnEvent.alpha = 0.6"/>
+			
+			<containers:MDICanvas width="100%" height="100%" id="mdiCanvas">
+				<s:VGroup width="100%" height="100%" gap="0">
+					<s:HGroup horizontalAlign="right" width="100%">
+						<s:TextInput id="txtNovaPlaylist" prompt="Salvar como Nova Playlist"
+									 x.Play="902" width.Play="217" includeInLayout="false" visible="false"/>
+						<components:ServiceButton tipoBotao="gravar" mostrarLabel="false" click="salvarComoNovaPlaylist(event)" toolTip="Salvar como Nova Playlist"/>
+						<components:ServiceButton id="btnCancelar" tipoBotao="cancelar" mostrarLabel="false" click="cancelarSalvar(event)" includeInLayout="false" 
+												  toolTip="cancelar" visible="false"/>
+					</s:HGroup>
+					<s:HGroup width="100%" height="100%" horizontalAlign="right">
+						<mx:AdvancedDataGrid id="gridPlaylist" includeIn="Play" x="640" width="305"
+											 height="100%" copy="gridPlaylist_copyHandler(event)"
+											 dataProvider="{_arrPlaylist}" designViewDataType="flat"
+											 doubleClick="ouvirSelecionada(event)"
+											 doubleClickEnabled="true" sortExpertMode="true" dragMoveEnabled="true"
+											 styleFunction="myStyleFunc" dragEnabled="true" dropEnabled="true">
+							<mx:columns>
+								<mx:AdvancedDataGridColumn dataField="musNome" headerText="Lista de Reprodução"/>
+								<mx:AdvancedDataGridColumn sortable="false" width="30" resizable="false">
+									<mx:itemRenderer>
+										<fx:Component>
+											<mx:VBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+												<s:Image source="@Embed('Assets/excluir.png')" buttonMode="true" useHandCursor="true" 
+														 click="outerDocument.excludeFromPlaylist()"/>
+											</mx:VBox>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:AdvancedDataGridColumn>
+							</mx:columns>
+						</mx:AdvancedDataGrid>
+						
+					</s:HGroup>
+				</s:VGroup>
+			</containers:MDICanvas>
+		</s:Group>
+		
+		<s:HGroup width.index="100%" gap.index="0" horizontalAlign.index="right">
+			<mx:Image includeIn="index" x="0" y="516" buttonMode="true"  
+					  source="@Embed('Assets/subir.png')" useHandCursor="true"
+					  scaleX=".7" scaleY=".7" 
+					  rollOver="doZoom(event)" rollOut="doZoom(event)"
+					  click="currentState = 'Play'" creationComplete="smoothImage(event)"/>
+		</s:HGroup>
+		
+		<s:HGroup id="hgroup" width="100%" height="32" horizontalAlign="right" verticalAlign="middle"
+				  height.Play="125" >
+			<s:Panel id="panel" width="100%" height="100%">
+				<s:layout.Play>
+					<s:VerticalLayout/>
+				</s:layout.Play>
+				
+				<s:HGroup width="100%" horizontalAlign="right">
+					<mx:Image 	includeIn="Play" x="1264" y="-1"	source="@Embed('Assets/descer.png')"
+								useHandCursor="true" buttonMode="true"
+								x.Play="10" y.Play="29"
+								rollOver="doZoom(event)" rollOut="doZoom(event)"
+								click="currentState = 'index'" creationComplete="smoothImage(event)"/>
+				</s:HGroup>
+				<s:HGroup includeIn="Play" width="100%" horizontalAlign="center" verticalAlign="middle">
+					<mx:Image click="abrirViewPlaylist(event)" source="@Embed('Assets/play.png')" buttonMode="true"/>
+					<s:Spacer width="25"/>
+					<mx:Image click.Play="backPlay(event)" source="@Embed('Assets/back.png')" buttonMode="true"/>
+					
+					<mx:Image click="soundPlay()" source="Assets/executar.png" buttonMode="true"/>
+					<mx:Image click.Play="nextPlay(event)" source="@Embed('Assets/next.png')" buttonMode="true"/>
+					<mx:Image click="soundPause()" source="Assets/pause.png" buttonMode="true"/>
+					<mx:Image click="soundStop()" source="Assets/stop.png" buttonMode="true"/>
+					<s:HSlider id="hsProgress" x="291" width="238" height="14" change="setaProgressoManual(event)"
+							   minimum="0" x.Play="449" width.Play="400"
+							   dataTipFormatFunction="myDataTipFunc" />
+					<mx:Image source="Assets/shuffle.png" buttonMode="true" alpha="{shuffle ? 1 : 0.3}" click="shufle(event)" toolTip="Aleátorio"/>
+					<mx:Label text="Volume"/>
+					<s:HSlider id="volume" x="374" y="3" width="70" height="15" change="mudaVolume()"
+							   maximum="100" minimum="0" value="100"
+							   width.Play="100"/>
+				</s:HGroup>
+				<s:HGroup width.Play="100%" horizontalAlign.Play="center">
+					<components:ServiceLabel includeIn="index"/>
+					<components:ServiceLabel id="lblPlaylist" includeIn="index"/>
+					<components:ServiceLabel text.Play="Música: "/>
+					<components:ServiceLabel id="lblMusica" text.Play=""/>
+				</s:HGroup>
+			</s:Panel>
+		</s:HGroup>
+	</s:VGroup>
+	
+	
+	
+	<s:HGroup visible="false" includeInLayout="false" id="user" x="{vgroup.width - (user.width + 5) }" >
+		<s:Image width="39" height="39"
+				 source="{__modelLocator.usuarioLogado.usuFoto == '' ? 'assets/person.png' :
+				 (Funcoes.URLServer() + '/Imagens/'+ __modelLocator.usuarioLogado.usuFoto )}" />
+		<s:Label text="{__modelLocator.usuarioLogado.usuNome}" height="100%" verticalAlign="middle" />
+	</s:HGroup>
+</s:Application>

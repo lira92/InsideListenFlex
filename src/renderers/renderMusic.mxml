@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				autoDrawBackground="true" width="100%" height="100%">
+	<fx:Script>
+		<![CDATA[
+			import Model.Funcoes;
+			import Model.Usuario;
+			
+			import View.ViewUsuario;
+			
+			import mx.controls.Menu;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.events.MenuEvent;
+			
+			protected function clickAdd(event:MouseEvent):void
+			{
+				var menu:Menu = Menu.createMenu( this.parent, xmlMenuList, true );
+				menu.labelField = "@label";
+				menu.addEventListener(MenuEvent.ITEM_CLICK, handleClick);
+				var point:Point = new Point( event.stageX, event.stageY );
+				//point = parent.localToGlobal( point );
+				menu.show(  point.x, point.y );
+			}
+		
+			protected function handleClick(event:MenuEvent):void
+			{
+				switch(event.index)
+				{
+					case 0:
+						FlexGlobals.topLevelApplication.arrPlaylist.addItemAt(data, FlexGlobals.topLevelApplication.getIndexAtual+1);
+						break;
+					case 1:
+						FlexGlobals.topLevelApplication.arrPlaylist.addItem(data);
+						break;
+					case 2:
+						FlexGlobals.topLevelApplication.arrPlaylist.addItemAt(data,0);
+						break;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<fx:XMLList id="xmlMenuList">
+			<menuitem label="Adicionar Proxima"/>
+			<menuitem label="Adicionar Ultima"/>
+			<menuitem label="Adicionar Primeira"/>
+		</fx:XMLList>
+	</fx:Declarations>
+	
+	<s:HGroup width="100%" height="100%" horizontalAlign="left" verticalAlign="middle" paddingBottom="2" paddingTop="2">
+		<s:Label width="100%" text="{data.musNome}"/>
+		<mx:VBox height="100%" verticalAlign="middle" horizontalAlign="center">
+			<s:Image source="@Embed('Assets/addList.png')" click="clickAdd(event)" buttonMode="true" useHandCursor="true"/>
+		</mx:VBox>
+	</s:HGroup>
+	
+	
+</s:ItemRenderer>

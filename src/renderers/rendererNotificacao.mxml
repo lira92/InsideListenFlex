@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				autoDrawBackground="true" width="100%" height="100%">
+	<fx:Script>
+		<![CDATA[
+			import Model.Funcoes;
+			
+			import mx.controls.DateField;
+			public function retornoTexto(data:Object):String
+			{
+				var str:String = "";
+				if(data.eveTipo == 'S')
+				{
+					str = data.usuNome + " ouviu a música " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'L')
+				{
+					str = data.usuNome + " ouviu a Playlist " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'M')
+				{
+					str = data.usuNome + " Cadastrou a Música " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'T')
+				{
+					str = data.usuNome + " atualizou a playlist " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'R')
+				{
+					str = data.usuNome + " Cadastrou o Artista " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'G')
+				{
+					str = data.usuNome + " Cadastrou o Gênero " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'P')
+				{
+					str = data.usuNome + " Cadastrou a Playlist " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'A')
+				{
+					str = data.usuNome + " Cadastrou o Album " + data.nomeReferencia;
+				}
+				else if(data.eveTipo == 'U')
+				{
+					str = data.usuNome + " Cadastrou/Alterou o Usuario " + data.nomeReferencia;
+				}
+				
+				if(str.length > 50)
+				{
+					var retorno:String = "";
+					var i:int = 50;
+					var ultimoindice:int = 0;
+					while(i >= 0)
+					{
+						if(str.charAt(i) == " ")
+						{
+							retorno += str.substring(ultimoindice, i) + "\n";
+							ultimoindice = i;
+							if(str.length > (i + 50))
+							{
+								i += 50;
+								continue;
+							}
+							else
+							{
+								retorno += str.substr(ultimoindice + 1);
+								break;
+							}
+						}
+						i--;
+					}
+					return retorno;
+				}
+				else
+				{
+					return str;
+				}
+			}
+			
+			public function retornaTime(data:Object):String
+			{
+				var retorno:String = "";
+				var ontem:Date = new Date();
+				ontem.setDate(new Date().getDate() - 1);
+				if((data.eveDataHora as Date).date == new Date().date 
+					&& (data.eveDataHora as Date).month == new Date().month
+					&& (data.eveDataHora as Date).fullYear == new Date().fullYear)
+				{
+					retorno = "Hoje às ";
+				}
+				else if((data.eveDataHora as Date).date == ontem.date 
+					&& (data.eveDataHora as Date).month == ontem.month
+					&& (data.eveDataHora as Date).fullYear == ontem.fullYear)
+				{
+					retorno = "Ontem às ";
+				}
+				else
+				{
+					retorno = DateField.dateToString(data.eveDataHora, "DD/MM/YYYY") + " às ";
+				}
+				
+				retorno += tmFormat.format(data.eveDataHora);
+				return retorno;
+			}
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="hovered" />
+		<s:State name="selected" />
+	</s:states>
+	<fx:Declarations>
+		<s:DateTimeFormatter locale="pt_BR" id="tmFormat" dateStyle="none" timeStyle="short"/>
+	</fx:Declarations>
+	<s:Rect left="0" right="0" top="0" bottom="0">
+		<s:fill>
+			<s:SolidColor color.selected="0x383c40" color.normal="0x23252a" color.hovered="0x383c40"
+						  alpha.selected="0.8" alpha.hovered="0.5" alpha.normal="0.8" />
+		</s:fill>
+	</s:Rect>
+	<s:HGroup id="hgRender" width="100%" height="100%" verticalAlign="middle" horizontalAlign="left">
+		<mx:VBox width="92" height="100%" horizontalAlign="center" verticalAlign="middle">
+			<s:Image source="{data.usuFoto == '' ? 'assets/person.png' : Funcoes.URLServer() + '/Imagens/' + data.usuFoto}"/>
+		</mx:VBox>
+		<s:Label text="{retornoTexto(data)}" color="0xffffff"/>
+	</s:HGroup>
+	<s:Label id="lbTime" fontSize="8" text="{retornaTime(data)}" y="3" x="{(hgRender.width - lbTime.width) - 2}" color="0x336699" color.selected="0xCCCCCC"/>
+	<s:Line left="0" right="0" bottom="0" width="1">
+		<s:stroke>
+			<s:SolidColorStroke color="0x000000"/>
+		</s:stroke>
+	</s:Line>
+</s:ItemRenderer>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							width="594" height="242" layout="vertical" paddingBottom="5"
+							paddingLeft="5" paddingRight="5" paddingTop="5" title="Novo usuário" xmlns:components="components.*"
+							close="closeView(event)">
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator source="{txtNome}" property="text"
+								required="true" requiredFieldError="Informe um nome!"/>
+			<mx:EmailValidator source="{txtEmail}" property="text"
+							   invalidCharError="Caracteres inválidos!"
+							   invalidDomainError="Domínio inválido!"
+							   invalidIPDomainError="Ip inválido!"
+							   invalidPeriodsInDomainError="Pontuação inválida!"
+							   missingAtSignError="Insira o símbolo de @!"
+							   missingPeriodInDomainError="Insira o símbolo .!"
+							   missingUsernameError="Faltando nome no e-mail"
+							   requiredFieldError="Informe um e-mail"
+							   tooManyAtSignsError="Infome somente um símbolo de @!"/>
+			<mx:StringValidator source="{txtSenha}" property="text"
+								requiredFieldError="Informe uma Senha!"
+								triggerEvent="change"/>
+			<mx:StringValidator source="{txtConfirme}" property="text"
+								requiredFieldError="Preencha a confirmação de senha!"
+								triggerEvent="change"/>
+		</fx:Array>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Funcoes;
+			import Model.ModelLocatorLogin;
+			import Model.Usuario;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			import components.mdi.events.MDIWindowEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.validators.Validator;
+			
+			private var file:FileReference;
+			
+			[Bindable]private var arrUsuario:ArrayCollection = new ArrayCollection();
+			[Bindable]private var usuario:Usuario = new Usuario();
+			
+			private var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			
+			public function atualizaUsuario( usuario:Usuario):void
+			{
+				usuario.usuConfirma = "";
+				this.usuario = usuario;	
+			}
+			
+			protected function fazerUploadClick(event:MouseEvent):void
+			{
+				file = new FileReference();
+				file.addEventListener(Event.SELECT, onSelected);
+				file.addEventListener(Event.OPEN, onOpen);
+				file.addEventListener(Event.COMPLETE, onComplete);
+				file.addEventListener(ProgressEvent.PROGRESS, onProgress);
+				file.addEventListener(IOErrorEvent.IO_ERROR, onError);
+				
+				file.browse([new FileFilter("Images", "*.jpg;*.gif;*.png")]);
+			}
+			
+			private function onSelected(event:Event):void
+			{
+				btnUpload.enabled = false;
+				var request:URLRequest = new URLRequest();
+				request.url = Funcoes.URLServer() + "/uploadImage.ashx";
+				request.method = URLRequestMethod.POST;
+				file.upload(request);
+				
+				pbProgresso.setProgress(0, 100);
+			}
+			
+			private function onOpen(event:Event):void
+			{
+				pbProgresso.mode = "manual";
+			}
+			
+			private function onComplete(event:Event):void
+			{
+				btnUpload.enabled = true;
+				img.source = Funcoes.URLServer() + "/Imagens/" + file.name;
+				usuario.usuFoto = file.name;
+			}
+			
+			private function onProgress(event:ProgressEvent):void
+			{
+				pbProgresso.setProgress(event.bytesLoaded, event.bytesTotal);
+			}
+			
+			private function onError(event:IOErrorEvent):void
+			{
+				btnUpload.enabled = true;
+				ServiceAlert.erro("Não foi possível efetuar Upload do arquivo!" + "\n" + "Erro: " + event.toString());
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				if(event.toString().indexOf("The DELETE statement conflicted with the REFERENCE constraint ") != -1)
+				{
+					ServiceAlert.erro("Não é possével excluir o usuário pois o mesmo possui vinculos!");
+				}
+				else if(event.toString().indexOf("E-mail já cadastrado") != -1)
+				{
+					ServiceAlert.erro("E-mail já cadastrado");
+				}
+				else
+				{
+					ServiceAlert.erro("Erro! " + event.fault.message);
+				}
+			}
+			
+			protected function gravarUsuario(event:MouseEvent):void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(txtSenha.text != txtConfirme.text)
+				{
+					ServiceAlert.erro("O campo senha e confirme devem ser iguais!");
+					return;
+				}
+				if(hasErrors.length == 0)
+				{
+					usuario.usuNome = txtNome.text;
+					usuario.usuEmail = txtEmail.text;
+					usuario.usuSenha = txtSenha.text;
+					usuario.usuConfirma = txtConfirme.text;
+					usuario.usuAdmin = chkAdmin.selected;
+					RemoteDestination.Remote("Usuario", "tokGravar", "gravarUsuario", fault, resultGravar, usuario, 
+						__modelLocator.usuarioLogado.usuCodigo);
+				}
+				else
+				{
+					ServiceAlert.erro("Verifique os campos em vermelho!");
+				}
+				
+			}
+			
+			private function resultGravar(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Usuário " + event.result + " gravado com sucesso!");
+				this.close();
+			}
+			
+			private function limparCampos():void
+			{
+				txtNome.text = "";
+				txtEmail.text = "";
+				txtSenha.text= "";
+				txtConfirme.text = "";
+				chkAdmin.selected = false;
+			}
+			
+			protected function closeView(event:MDIWindowEvent):void
+			{
+				limparCampos();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%">
+		<s:VGroup width="127" height="161" horizontalAlign="center">
+			<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+				<s:Image id="img" source="{usuario.usuFoto == '' ? 'Assets/person.png' : (Funcoes.URLServer() + '/Imagens/' + usuario.usuFoto)}" />
+			</mx:VBox>
+			<mx:ProgressBar id="pbProgresso" width="100%" height="15" labelPlacement="center"/>
+			<s:Button id="btnUpload" label="Alterar Imagem" click="fazerUploadClick(event)"/>
+		</s:VGroup>
+		
+		<s:VGroup width="100%">
+			<s:HGroup width="100%">
+				<components:ServiceLabel obrigatorio="true" text="nome:"/>
+				<s:TextInput id="txtNome" width="100%" text="{usuario.usuNome}"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<components:ServiceLabel obrigatorio="true" text="Email:"/>
+				<s:TextInput id="txtEmail" width="100%" text="{usuario.usuEmail}"/>
+			</s:HGroup>
+			<s:HGroup >
+				<components:ServiceLabel obrigatorio="true" text="Senha:"/>
+				<s:TextInput id="txtSenha" text="{usuario.usuSenha}" displayAsPassword="true"/>
+				<components:ServiceLabel obrigatorio="true" text="Confirme:"/>
+				<s:TextInput id="txtConfirme" text="{usuario.usuConfirma}" displayAsPassword="true"/>
+			</s:HGroup>
+			<s:HGroup width="100%" paddingLeft="90">
+				<s:CheckBox id="chkAdmin" label="Admin" selected="{usuario.usuAdmin}"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+	<s:HGroup width="100%" horizontalAlign="right">
+		<components:ServiceButton tipoBotao="gravar" click="gravarUsuario(event)"/>
+		<components:ServiceButton tipoBotao="limpar" click="limparCampos()"/>
+	</s:HGroup>
+	
+</containers:MDIWindowCustom>

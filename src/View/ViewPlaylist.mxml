@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							xmlns:components="components.*"
+							width="600" height="300" creationComplete="onInit(event)"
+							layout="vertical" maximizeRestoreOption="true" paddingBottom="5"
+							paddingLeft="5" paddingRight="5" paddingTop="5" resizable="true"
+							title="Cadastro de playlist"
+							width.PlaylistMusica="754" height.PlaylistMusica="408"
+							dropShadowVisible.PlaylistMusica="true"
+							title.PlaylistMusica="Musicas Playlist"
+							width.State1="728" height.State1="376">
+	<containers:states>
+		<s:State name="State1"/>
+		<s:State name="PlaylistMusica"/>
+	</containers:states>
+	<fx:Declarations>
+		<fx:Array id="arrValidadores">
+			<mx:StringValidator source="{txtNome}" property="text"
+								required="true" requiredFieldError="Informe uma nome!"
+								maxLength="100" tooLongError="O campo nome excedeu o limite de 100 caracteres!"/>
+			<s:NumberValidator allowNegative="false" minValue="0" 
+							   lessThanMinError="Selecione o gênero" negativeError="Selecione o gênero" 
+							   property="selectedIndex" source="{cboGenero}"/>
+		</fx:Array>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Evento;
+			import Model.ModelLocatorLogin;
+			import Model.Musicas;
+			import Model.Playlist;
+			import Model.PlaylistMusica;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.DragManager;
+			import mx.managers.PopUpManager;
+			import mx.managers.PopUpManagerChildList;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.validators.Validator;
+			
+			[Bindable]private var playList:Playlist = new Playlist();
+			[Bindable]private var arrPlaylist:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrGenero:ArrayCollection = new ArrayCollection();
+			[Bindable]private var editando:Boolean = new Boolean();
+			[Bindable]public var __modelLocator:ModelLocatorLogin = ModelLocatorLogin.getInstance();
+			[Bindable]private var evento:Evento = new Evento();
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				listarPlaylist();
+				playList.usuCodigo = __modelLocator.usuarioLogado.usuCodigo;
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				if(event.toString().indexOf("The DELETE statement conflicted with the REFERENCE constraint ") != -1)
+				{
+					ServiceAlert.erro("Não foi possível excluir a Playlist pois possui vinculos!");
+				}
+				else
+				{
+					ServiceAlert.erro("Ocorreu o erro! " + event.fault.message);
+				}
+			}
+			
+			private function listarPlaylist():void
+			{
+				RemoteDestination.Remote("Playlist", "tokListar", "listarPlaylist", fault, resultListar);
+			}
+			
+			private function resultListar(event:ResultEvent):void
+			{
+				arrPlaylist = event.result as ArrayCollection;
+				listarGenero();
+			}
+			
+			private function listarGenero():void
+			{
+				RemoteDestination.Remote("Genero", "tokListar", "listarGenero", fault, resultListarGenero);
+			}
+			
+			private function resultListarGenero(event:ResultEvent):void
+			{
+				arrGenero = event.result as ArrayCollection;
+			}
+			
+			protected function gravar(event:MouseEvent):void
+			{
+				var hasErrors:Array = Validator.validateAll(arrValidadores);
+				if(hasErrors.length == 0)
+				{
+					playList.plaNome = txtNome.text;
+					playList.usuCodigo = __modelLocator.usuarioLogado.usuCodigo;
+					playList.genCodigo = cboGenero.selectedItem.genCodigo;
+					
+					RemoteDestination.Remote("Playlist", "tokGravar", "gravarPlaylist", fault, resultGravar, playList);
+				}
+			}
+			
+			private function resultGravar(event:ResultEvent):void
+			{
+				if(editando == true)
+				{
+					ServiceAlert.sucesso("Playlist " + event.result + " editada com sucesso!");
+				}else
+				{
+					ServiceAlert.sucesso("Playlist " + event.result + " salva com sucesso!");
+				}
+				listarPlaylist();
+				limparObjeto();
+			}
+			
+			public function editarPlaylist():void
+			{
+				editando = true;
+				playList = gridPlaylist.selectedItem as Playlist;
+			}
+			
+			public function limparObjeto():void
+			{
+				playList = new Playlist();	
+				editando = false;
+				cboGenero.selectedIndex = -1;
+				txtBuscar.setFocus();
+			}
+			
+			public function clickExcluir():void
+			{
+				playList = gridPlaylist.selectedItem as Playlist;
+				ServiceAlert.confirmacao("Confirma exclusão?", excluirPlaylist); 
+			}
+			
+			private function excluirPlaylist(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					RemoteDestination.Remote("Playlist", "tokExcluir", "excluirPlaylist", fault, resultExcluirPlaylist, playList.plaCodigo, 
+						playList.usuCodigo);
+				}
+			}
+			
+			private function resultExcluirPlaylist(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso("Playlist " + event.result + " excluir com sucesso!");
+				listarPlaylist();
+				limparObjeto();
+			}
+			
+			private function filter(obj:Object):Boolean
+			{
+				if((obj.plaNome as String).toUpperCase().indexOf(txtBuscar.text.toUpperCase()) != -1)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function pesquisar(event:KeyboardEvent):void
+			{
+				arrPlaylist.filterFunction = filter;
+				arrPlaylist.refresh();
+			}
+			
+			
+			/**State PlaylistMusicas**/
+			[Bindable] private var arrMusica:ArrayCollection = new ArrayCollection();
+			[Bindable] private var arrMusicaPlaylist:ArrayCollection = new ArrayCollection();
+			[Bindable] private var musica:Musicas = new Musicas();
+			[Bindable] private var playlistMusica:PlaylistMusica = new PlaylistMusica();
+			
+			public function alteraState(event:MouseEvent):void
+			{
+				currentState = "PlaylistMusica";
+				playList = gridPlaylist.selectedItem as Playlist;
+				playlistMusica.plaCodigo = playList.plaCodigo;
+				listarMusica();
+			}
+			
+			private function listarMusica():void
+			{
+				RemoteDestination.Remote("PlaylistMusica", "tokListarMusica", "listarMusica", fault, resultListarMusica, playlistMusica.plaCodigo); 
+			}
+			
+			private function resultListarMusica(event:ResultEvent):void
+			{
+				arrMusica = event.result as ArrayCollection;
+				listarMusicaPlaylist();
+			}
+			
+			private function listarMusicaPlaylist():void
+			{
+				RemoteDestination.Remote("PlaylistMusica", "tokListarMusicaPlaylist", "listarMusicaPlaylist", fault, resultListarMusicaPlaylist,
+					playlistMusica.plaCodigo);
+			}
+			
+			private function resultListarMusicaPlaylist(event:ResultEvent):void
+			{
+				arrMusicaPlaylist = event.result as ArrayCollection;
+			}
+			
+			protected function gravarMusicaPlaylist(event:MouseEvent):void
+			{
+				RemoteDestination.Remote("PlaylistMusica", "tokGravarPlaylistMusica", "gravarPlaylistMusica", fault, resultGravarPlaylistMusica, 
+					arrMusicaPlaylist, __modelLocator.usuarioLogado.usuCodigo);
+			}
+			
+			private function resultGravarPlaylistMusica(event:ResultEvent):void
+			{
+				ServiceAlert.sucesso(event.result + " músicas inseridas com sucesso!");
+			}
+			
+			private function filterMusica(obj:Object):Boolean
+			{
+				if(txtMusica.text == "" && txtGenero.text == "" && txtArtista.text == "")
+				{
+					return true
+				}
+				else
+				{
+					if((txtMusica.text != "" ? (obj.musNome as String).toUpperCase().indexOf(txtMusica.text.toUpperCase()) != -1 : true) &&
+						(txtGenero.text != "" ? (obj.genNome as String).toUpperCase().indexOf(txtGenero.text.toUpperCase()) != -1 : true) &&
+						(txtArtista.text != "" ? (obj.artNome as String).toUpperCase().indexOf(txtArtista.text.toUpperCase()) != -1 : true))
+					{
+						return true;
+					}
+					else
+					{
+						return false;
+					}
+				}
+				
+			}
+			
+			protected function pesquisarMusica(event:KeyboardEvent):void
+			{
+				arrMusica.filterFunction = filterMusica;
+				arrMusica.refresh();
+			}
+			
+			private function filterMusicaPlaylist(obj:Object):Boolean
+			{
+				if((obj.musNome as String).toUpperCase().indexOf(txtMusicaPlaylist.text.toUpperCase()) != -1)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function pesquisarMusicaPlaylist(event:KeyboardEvent):void
+			{
+				arrMusicaPlaylist.filterFunction = filterMusicaPlaylist;
+				arrMusicaPlaylist.refresh();
+			}
+			
+			protected function executarMusica(lista:int):void
+			{
+				evento.eveTipo = "S";
+				evento.eveDescricao = "OUVIU A MÚSICA";
+				evento.eveReferencia = lista == 1 ? (listMusicaPlaylist.selectedItem as PlaylistMusica).musCodigo : (listMusica.selectedItem as PlaylistMusica).musCodigo;
+				evento.usuCodigo = __modelLocator.usuarioLogado.usuCodigo;
+				RemoteDestination.Remote("Evento", "tokGravar", "gravarEvento", fault, resultGravarEventoMusica, evento);
+				
+				function resultGravarEventoMusica(event:ResultEvent):void
+				{
+					playlistMusica = (lista == 1 ? listMusicaPlaylist.selectedItem : listMusica.selectedItem);
+					musica.musCodigo = playlistMusica.musCodigo;
+					musica.musNome = playlistMusica.musNome;
+					var viewListenMusic:ViewListenMusic = new ViewListenMusic();
+					viewListenMusic.musica = musica;
+					PopUpManager.addPopUp(viewListenMusic,FlexGlobals.topLevelApplication.mdiCanvas, true);
+					PopUpManager.centerPopUp(viewListenMusic);
+				}
+			}
+			
+			protected function ouvirPlaylist(event:MouseEvent):void
+			{
+				if(arrMusicaPlaylist.length == 0)
+				{
+					ServiceAlert.atencao("Playlist vazia");
+				}
+				else
+				{
+					evento.eveTipo = "L";
+					evento.eveDescricao = "OUVIU A PLAYLIST";
+					evento.eveReferencia = playlistMusica.plaCodigo;
+					evento.usuCodigo = __modelLocator.usuarioLogado.usuCodigo;
+					RemoteDestination.Remote("Evento", "tokGravar", "gravarEvento", fault, resultGravarEvento, evento);
+				}
+				
+			}
+			
+			private function resultGravarEvento(event:ResultEvent):void
+			{
+				FlexGlobals.topLevelApplication.arrPlaylist = arrMusicaPlaylist;
+			}
+			
+			private function clickSair():void
+			{
+				limparObjeto();
+				currentState = 'State1';
+			}
+			
+			public function addPlaylist(event:MouseEvent):void
+			{
+				playList = gridPlaylist.selectedItem as Playlist;
+				playlistMusica.plaCodigo = playList.plaCodigo;
+				RemoteDestination.Remote("PlaylistMusica", "tokListarMusicaPlaylist", "listarMusicaPlaylist", fault, resultAddPlaylist,
+					playlistMusica.plaCodigo);
+				
+			}
+			
+			private function resultAddPlaylist(event:ResultEvent):void
+			{
+				FlexGlobals.topLevelApplication.arrPlaylist.addAll(event.result as ArrayCollection);
+			}
+		]]>
+	</fx:Script>
+	
+	
+	
+	
+	<s:HGroup includeIn="State1" width="100%">
+		<components:ServiceLabel text="Buscar "/>
+		<s:TextInput id="txtBuscar" width="300" keyUp="pesquisar(event)"/>
+	</s:HGroup>
+	<mx:AdvancedDataGrid id="gridPlaylist" includeIn="State1" width="100%" height="100%"
+						 dataProvider="{arrPlaylist}" designViewDataType="flat">
+		<mx:columns>
+			<mx:AdvancedDataGridColumn dataField="plaCodigo" headerText="Código" width="70"/>
+			<mx:AdvancedDataGridColumn dataField="plaNome" headerText="Nome" />
+			<mx:AdvancedDataGridColumn dataField="genNome" headerText="Genêro" />
+			<mx:AdvancedDataGridColumn dataField="usuNome" headerText="Usuário" />
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image  source="@Embed('Assets/addList.png')" useHandCursor="true" buttonMode="true" 
+									  toolTip="Adicionar A lista de Reprodução"
+									  click="outerDocument.addPlaylist(event)"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image  source="@Embed('Assets/play.png')" useHandCursor="true" buttonMode="true" 
+									  click="outerDocument.alteraState(event)"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image id="imgEditar" source="@Embed('Assets/edit.png')" useHandCursor="true" buttonMode="true" 
+									 click="outerDocument.editarPlaylist()" 
+									 enabled="{outerDocument.__modelLocator.usuarioLogado.usuCodigo == data.usuCodigo}"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn sortable="false" resizable="false" width="30">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+							<s:Image source="@Embed('Assets/delete.png')" useHandCursor="true" buttonMode="true" 
+									 click="outerDocument.clickExcluir()"
+									 enabled="{outerDocument.__modelLocator.usuarioLogado.usuCodigo == data.usuCodigo}"/>
+						</mx:VBox>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</mx:columns>
+	</mx:AdvancedDataGrid>
+	<s:HGroup includeIn="State1" width="100%">
+		<components:ServiceLabel text="Nome "/>
+		<s:TextInput id="txtNome" width="100%" text="{playList.plaNome}"/>
+		<components:ServiceLabel text="Gênero " />
+		<components:ServiceDropDown id="cboGenero" width="100%"
+									selectedProperty="genCodigo" selectedValue="{playList.genCodigo}"
+									dataProvider="{arrGenero}" labelField="genNome"/>
+	</s:HGroup>
+	<s:HGroup includeIn="State1" width="100%" horizontalAlign="right">
+		<components:ServiceButton id="btnGravar" tipoBotao="gravar" click="gravar(event)"/>
+		<components:ServiceButton id="btnLimpar" tipoBotao="limpar" click="limparObjeto()"/>
+	</s:HGroup>
+	
+	
+	<!--State PlaylistMusica-->
+	<s:HGroup includeIn="PlaylistMusica" width="100%" height="100%">
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup>
+				<s:Label width="43" height="100%" text="Música:" verticalAlign="middle"/>
+				<s:TextInput id="txtMusica" width="155" keyUp.PlaylistMusica="pesquisarMusica(event)"/>
+				<s:Label height="100%" text="Gênero:" verticalAlign="middle"/>
+				<s:TextInput id="txtGenero" width="155" keyUp.PlaylistMusica="pesquisarMusica(event)"/>
+			</s:HGroup>
+			<s:HGroup>
+				<s:Label width="43" height="100%" text="Artista:" verticalAlign="middle"/>
+				<s:TextInput id="txtArtista" width="155" keyUp.PlaylistMusica="pesquisarMusica(event)"/>
+			</s:HGroup>
+			<s:List id="listMusica" width="100%" height="100%" dragMoveEnabled.PlaylistMusica="true"
+					dataProvider.PlaylistMusica="{arrMusica}" labelField.PlaylistMusica="musNome" itemRenderer.PlaylistMusica="renderers.renderMusic"
+					dragEnabled.PlaylistMusica="true" allowMultipleSelection.PlaylistMusica="true"
+					doubleClickEnabled.PlaylistMusica="true"
+					doubleClick.PlaylistMusica="executarMusica(0)"
+					dropEnabled="{__modelLocator.usuarioLogado.usuCodigo == playList.usuCodigo}"></s:List>
+		</s:VGroup>
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup>
+				<s:Label height="100%" text="Música Playlist" verticalAlign="middle"/>
+				<s:TextInput id="txtMusicaPlaylist" width="155" keyUp="pesquisarMusicaPlaylist(event)"/>
+			</s:HGroup>
+			<s:List id="listMusicaPlaylist" width="100%" height="100%"
+					dataProvider.PlaylistMusica="{arrMusicaPlaylist}" labelField.PlaylistMusica="musNome"
+					dragEnabled="true" dragMoveEnabled="true"
+					dropEnabled.PlaylistMusica="{__modelLocator.usuarioLogado.usuCodigo == playList.usuCodigo}" doubleClickEnabled.PlaylistMusica="true"
+					doubleClick.PlaylistMusica="executarMusica(1)"></s:List>
+		</s:VGroup>
+	</s:HGroup>
+
+	<s:HGroup includeIn="PlaylistMusica" width="100%" horizontalAlign.PlaylistMusica="right">
+		<components:ServiceLabel obrigatorio.PlaylistMusica="true" text.PlaylistMusica="Duplo clique para executar"/>
+		<s:Spacer width.PlaylistMusica="100%" height.PlaylistMusica="100%"/>
+		<s:Button x="488" width="82" label="Ouvir" click="ouvirPlaylist(event)"
+				  icon="@Embed('Assets/ouvir.png')"/>
+		<components:ServiceButton x="435" width="80" click="gravarMusicaPlaylist(event)"
+								  tipoBotao="gravar" enabled.PlaylistMusica="{__modelLocator.usuarioLogado.usuCodigo == playList.usuCodigo}"/>
+		<components:ServiceButton width="80" tipoBotao="sair"
+								  click.PlaylistMusica="clickSair()"/>
+	</s:HGroup>
+</containers:MDIWindowCustom>

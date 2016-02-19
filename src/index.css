@@ -1,0 +1,28 @@
+/* CSS file */
+@namespace s "library://ns.adobe.com/flex/spark";
+@namespace mx "library://ns.adobe.com/flex/mx";
+
+
+global
+{
+	content-background-alpha: 0.99;
+}
+	
+.listMusic 
+{
+	/*skinClass: ClassReference("com.dgrigg.skins.ListSkin"); */
+	contentBackgroundAlpha:.5; 
+	contentBackgroundColor: #000000;
+	borderColor:#000000;
+	
+}
+
+s|List #scroller 
+{
+	horizontalScrollPolicy: off;
+}
+
+s|List s|VScrollBar {
+	skinClass: ClassReference("com.dgrigg.skins.VScrollBarSkin");
+	fixedThumbSize:true;
+}

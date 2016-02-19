@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							width="800" height="600" layout="vertical" title="Gráficos" xmlns:components="components.*"
+							creationComplete="onInit(event)">
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="interpolar" duration="1000" />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Usuario;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]private var arrEventosUsuario:ArrayCollection = new ArrayCollection();
+			[Bindable]private var arrUsuario:ArrayCollection = new ArrayCollection();
+			[Bindable]private var usuario:Usuario = new Usuario();
+			
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				RemoteDestination.Remote("Usuario", "tokListarUsuario", "listarUsuarios", fault, resultListarUsuario);
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				ServiceAlert.erro("Erro! " + event.fault.message);
+			}
+			
+			private function resultListarUsuario(event:ResultEvent):void
+			{
+				arrUsuario = event.result as ArrayCollection;
+			}
+			
+			protected function selecionaUsuario(event:IndexChangeEvent):void
+			{
+				usuario = cboUsuario.selectedItem;
+				RemoteDestination.Remote("EstatisticaTipo", "tokQuantidadeEventos", "listarEventosEstatistica", fault, resultSelecionaUsuario, 
+				usuario.usuCodigo); 
+			}
+			
+			private function resultSelecionaUsuario(event:ResultEvent):void
+			{
+				arrEventosUsuario = event.result as ArrayCollection;
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:TabNavigator width="100%" height="100%">
+		<s:NavigatorContent width="100%" height="100%" label="Usuários">
+			<s:VGroup width="100%" height="100%">
+				<s:HGroup width="100%" horizontalAlign="left">
+					<components:ServiceLabel text="Usuários"/>
+					<components:ServiceDropDown id="cboUsuario" dataProvider="{arrUsuario}" labelField="usuNome" change="selecionaUsuario(event)"/>
+				</s:HGroup>
+				<s:HGroup width="100%" height="100%">
+					<mx:ColumnChart id="graficoTipos" x="0" y="0" width="100%" height="100%"
+									dataProvider="{arrEventosUsuario}" showDataTips="true">
+							<mx:series>
+								<mx:ColumnSeries displayName="S = OUVIU A MUSICA" yField="tipoS" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="L = OUVIU A PLAYLIST" yField="tipoL" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="T = ATUALIZAÇÃO DE PLAYLIST" yField="tipoT" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="A = CADASTRO/ATUALIZACAO ALBUM" yField="tipoA" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="R = CADASTRO/ATUALIZACAO ARTISTA" yField="tipoR" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="G = CADASTRO/ATUALIZACAO GENERO" yField="tipoG" showDataEffect="{interpolar}"/>   
+								<mx:ColumnSeries displayName="M = CADASTRO/ATUALIZACAO MUSICA" yField="tipoM" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="U = CADASTRO/ATUALIZACAO USUARIO" yField="tipoU" showDataEffect="{interpolar}"/>
+								<mx:ColumnSeries displayName="P = CADASTRO/ATUALIZACAO PLAYLIST" yField="tipoP" showDataEffect="{interpolar}"/>
+							</mx:series>
+							<mx:horizontalAxis>
+								<mx:CategoryAxis displayName="Total" categoryField="total"/>
+							</mx:horizontalAxis>
+					</mx:ColumnChart>
+					<mx:Legend x="100" dataProvider="{graficoTipos}"/>
+				</s:HGroup>
+			</s:VGroup>
+			
+			
+		</s:NavigatorContent>
+	</mx:TabNavigator>
+</containers:MDIWindowCustom>

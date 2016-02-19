@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="322" height="150" creationComplete="onInit(event)">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import Model.Funcoes;
+			import Model.Musicas;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			//=====================================================================================\\
+			[Bindable]private var _musica:Musicas = new Musicas();
+			[Bindable]private var soundString:URLRequest;
+			[Bindable]private var sound:Sound = new Sound();
+			[Bindable]private var soundChannel:SoundChannel = new SoundChannel();
+			[Bindable]private var sTrans:SoundTransform = new SoundTransform();
+			[Bindable]private var soundPosition:Number = 0;
+			
+			/*[Bindable][Embed('assets/animation.gif')]
+			protected static var animacao:Class;*/
+			private var segundos:Timer = new Timer(1000);
+			private var tocando:Boolean = false;
+			private function closePopUp():void
+			{
+				PopUpManager.removePopUp(this);
+				soundStop();
+				if(FlexGlobals.topLevelApplication._arrPlaylist.length > 0)
+				{
+					FlexGlobals.topLevelApplication.soundPlay();
+				}
+				
+				
+			}
+			
+			//=====================================================================================\\
+			public function set musica(value:Musicas):void{
+				this._musica = value;
+			}
+			//=====================================================================================\\
+			protected function onInit(event:FlexEvent):void
+			{
+				soundString = new URLRequest(Funcoes.URLServer() + '/Musicas/' + _musica.musNome);
+				FlexGlobals.topLevelApplication.soundPause();
+				soundLoad();   
+			}
+			//=====================================================================================\\
+			private function soundLoad():void{
+				sound.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+				sound.load(soundString);
+				sound.addEventListener(Event.COMPLETE, onComplete);
+			}
+			//=====================================================================================\\
+			private function onComplete(e:Event):void{
+				hsProgress.maximum = sound.length;
+				soundPlay();
+			}
+			//=====================================================================================\\
+			private function errorHandler(errorEvent:IOErrorEvent):void{
+				Alert.show("O som não pôde ser carregada: " + errorEvent.text);
+			}
+			//=====================================================================================\\
+			private function soundPlay():void{
+				if(!tocando){
+					if(FlexGlobals.topLevelApplication.tocando == true)
+					{
+						FlexGlobals.topLevelApplication.tocando = false;
+						FlexGlobals.topLevelApplication.soundPause();
+					}
+					imgPlay.visible = false;
+					imgPlay.includeInLayout = false;
+					imgPause.visible = true;
+					imgPause.includeInLayout = true;
+					tocando = false;
+					soundChannel = sound.play(soundPosition);
+					segundos.addEventListener(TimerEvent.TIMER, setaProgresso);
+					soundChannel.addEventListener(Event.SOUND_COMPLETE, musicaEncerrada);
+					segundos.start();
+					tocando = true;
+				}
+			}
+			//=====================================================================================\\
+			private function soundPause():void{
+				imgPlay.visible = true;
+				imgPlay.includeInLayout = true;
+				imgPause.visible = false;
+				imgPause.includeInLayout = false;
+				tocando = false;
+				soundPosition = soundChannel.position;
+				soundChannel.stop();
+				segundos.stop();
+				sound.removeEventListener(ProgressEvent.PROGRESS, setaProgresso);
+			}
+			//=====================================================================================\\
+			private function soundStop():void{
+				tocando = false;
+				soundPosition = 0;
+				soundChannel.stop();
+				segundos.stop();
+				sound.removeEventListener(ProgressEvent.PROGRESS, setaProgresso);
+			}
+			//=====================================================================================\\
+			private function setaProgresso(event:TimerEvent):void{
+				hsProgress.value = soundChannel.position;
+			}
+			//=====================================================================================\\
+			private function musicaEncerrada(event:Event):void{
+				soundChannel.removeEventListener(Event.SOUND_COMPLETE, musicaEncerrada);
+			}
+			//=====================================================================================\\
+			protected function setaProgressoManual(event:Event):void{
+				soundPause();
+				soundPosition = hsProgress.value;
+				soundPlay();
+			}
+			//=====================================================================================\\
+			private function mudaVolume():void{
+				sTrans.volume = volume.value;
+				soundChannel.soundTransform = sTrans;
+			}
+			//=====================================================================================\\
+			private function close():void
+			{
+				soundChannel.stop();
+				segundos.stop();
+				FlexGlobals.topLevelApplication.soundPlay();
+				PopUpManager.removePopUp(this);   
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<s:Image source="@Embed('Assets/player.png')" />
+	
+	<s:VSlider id="volume" x="14" y="49" width="16" height="80"
+				change="mudaVolume()" liveDragging="false" maximum="1" minimum="0" value="1"/>
+	<s:HSlider id="hsProgress" x="3" y="3" width="311" height="17"
+			   change="setaProgressoManual(event)" minimum="0"/>
+	<mx:Image id="imgPause" x="85" y="55" buttonMode="true" click="soundPause()" source="Assets/pausegreen.png"/>
+	<mx:Image id="imgPlay" x="84" y="52" width="60" height="60" buttonMode="true" click="soundPlay()"
+			  source="Assets/playblue.png" visible="false" includeInLayout="false"/>
+	<mx:Image x="90" y="106" buttonMode="true" click="soundStop()" source="Assets/stopblue.png"/>
+	<s:Image x="305" y="134" source="@Embed('Assets/close.png')" click="close()" useHandCursor="true" buttonMode="true"/>
+</s:Group>

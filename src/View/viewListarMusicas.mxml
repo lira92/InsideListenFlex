@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<containers:MDIWindowCustom xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:containers="components.mdi.containers.*"
+							width="454" height="340" layout="vertical" paddingBottom="5"
+							paddingLeft="5" paddingRight="5" paddingTop="5" creationComplete="onInit(event)"
+							title="{'Músicas do ' + (_tipo == 'art' ? ('Artista: ' + _artista.artNome) : ('Album: ' + _album.albNome))}">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import Model.Album;
+			import Model.Artista;
+			import Model.Evento;
+			import Model.Funcoes;
+			import Model.ModelLocatorLogin;
+			import Model.Musicas;
+			import Model.PlaylistMusica;
+			
+			import RemoteObject.RemoteDestination;
+			
+			import components.ServiceAlert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			[Bindable] private var playlistMusica:PlaylistMusica = new PlaylistMusica();
+			[Bindable]private var evento:Evento = new Evento();
+			[Bindable] private var musica:Musicas = new Musicas();
+			[Bindable] private var arrMusica:ArrayCollection = new ArrayCollection();
+			[Bindable]private var _album:Album = new Album();
+			[Bindable]private var _artista:Artista = new Artista();
+			[Bindable]private var _tipo:String = "";
+			
+			public function set album(value:Album):void
+			{
+				this._album = value;
+			}
+			
+			public function set artista(value:Artista):void
+			{
+				this._artista = value;
+			}
+			
+			public function set tipo(value:String):void
+			{
+				this._tipo = value;
+			}
+			
+			protected function executarMusica():void
+			{
+				evento.eveTipo = "S";
+				evento.eveDescricao = "OUVIU A MÚSICA";
+				evento.eveReferencia = (listMusica.selectedItem as PlaylistMusica).musCodigo;
+				evento.usuCodigo = ModelLocatorLogin.getInstance().usuarioLogado.usuCodigo;
+				RemoteDestination.Remote("Evento", "tokGravar", "gravarEvento", fault, resultGravarEventoMusica, evento);
+				
+				function resultGravarEventoMusica(event:ResultEvent):void
+				{
+					playlistMusica = listMusica.selectedItem;
+					musica.musCodigo = playlistMusica.musCodigo;
+					musica.musNome = playlistMusica.musNome;
+					var viewListenMusic:ViewListenMusic = new ViewListenMusic();
+					viewListenMusic.musica = musica;
+					FlexGlobals.topLevelApplication.addCenterMDIWindowCustom(viewListenMusic);
+				}
+			}
+			
+			private function fault(event:FaultEvent):void
+			{
+				ServiceAlert.erro("Ocorreu o erro! " + event.fault.message);
+			}
+			
+			
+			protected function onInit(event:FlexEvent):void
+			{
+				if(_tipo == "alb")
+				{
+					RemoteDestination.Remote("PlaylistMusica", "tokGravar", "listarMusicaAlbum", fault, resultLisarMusica, _album.albCodigo);
+				}
+				else
+				{
+					RemoteDestination.Remote("PlaylistMusica", "tokListarMusicaArtista", "listarMusicaArtista", fault, resultLisarMusica, _artista.artCodigo);
+				}
+
+			}
+			
+			private function resultLisarMusica(event:ResultEvent):void
+			{
+				arrMusica = event.result as ArrayCollection;
+			}
+			
+			protected function btnAdicionarTudoClick(event:MouseEvent):void
+			{
+				FlexGlobals.topLevelApplication.arrPlaylist.addAll(arrMusica);
+			}
+			
+			protected function btnPlayAll(event:MouseEvent):void
+			{
+				FlexGlobals.topLevelApplication.arrPlaylist = arrMusica;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup>
+		<s:Button label="Adicionar Todas" click="btnAdicionarTudoClick(event)"/>
+		<s:Button label="Reproduzir Tudo" click="btnPlayAll(event)"/>
+	</s:HGroup>
+	<s:List id="listMusica" width="100%" height="100%"
+			dataProvider="{arrMusica}" labelField="musNome" itemRenderer="renderers.renderMusic"
+			allowMultipleSelection="true"
+			doubleClickEnabled="true"
+			doubleClick="executarMusica()"/>
+</containers:MDIWindowCustom>
